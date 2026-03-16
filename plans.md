@@ -137,6 +137,8 @@ npm run test:extension
 ### 8. Implement auto-format on save
 Subscribe to `onDidSaveTextDocument` and reuse the same fix pipeline when `dfixxer.formatOnSave` is true.
 
+Status: complete on 2026-03-16.
+
 Acceptance criteria:
 - Only `pascal` and `objectpascal` documents are processed.
 - Untitled and non-file documents are skipped.
@@ -212,3 +214,4 @@ npm run package
 - Milestone 5: Managed installs now download into a temp workspace, extract with archive-type-specific logic, validate the candidate binary via `dfixxer version`, write metadata only after validation, and swap the install directory atomically so failed installs do not replace a working binary.
 - Milestone 6: `dfixxer.fixCurrentFile` now validates the active editor, resolves override or managed executables, saves dirty Pascal files before execution, omits `--config` when unset, reloads the editor from disk after success, and logs stdout/stderr details on failures.
 - Milestone 7: `dfixxer.createConfig` now prefills a deterministic save target, confirms before overwriting, resolves or installs an executable before use, runs `dfixxer init-config <target>`, and opens the created file after success.
+- Milestone 8: Auto-format now subscribes to post-save events, processes only Pascal/Object Pascal file-backed documents when enabled, suppresses the single save triggered by the manual fix command, and avoids retry loops after failures.

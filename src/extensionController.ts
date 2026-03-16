@@ -24,6 +24,7 @@ interface ExtensionTestHooks {
 
 export interface ExtensionApi {
   getLogLines(): readonly string[];
+  invokeDidSaveForTest(document: vscode.TextDocument): Promise<void>;
   resetTestHooks(): void;
   setTestHooks(hooks: ExtensionTestHooks): void;
 }
@@ -44,6 +45,7 @@ export class ExtensionController implements vscode.Disposable, ExtensionApi {
   private readonly documentGuard = new DocumentRunGuard();
   private readonly logLines: string[] = [];
   private readonly outputChannel = vscode.window.createOutputChannel(extensionName);
+  private readonly suppressedSaveDocuments = new Set<string>();
   private readonly logger = createLogger(
     new MirroredOutputChannel(this.outputChannel, this.logLines),
   );
@@ -54,6 +56,9 @@ export class ExtensionController implements vscode.Disposable, ExtensionApi {
   public register(): void {
     this.context.subscriptions.push(
       this.outputChannel,
+      vscode.workspace.onDidSaveTextDocument((document) => {
+        void this.handleDidSaveTextDocument(document);
+      }),
       vscode.commands.registerCommand(commandIds.createConfig, async () => this.createConfig()),
       vscode.commands.registerCommand(commandIds.fixCurrentFile, async () => this.fixCurrentFile()),
       vscode.commands.registerCommand(commandIds.updateExecutable, () => undefined),
@@ -62,6 +67,10 @@ export class ExtensionController implements vscode.Disposable, ExtensionApi {
 
   public getLogLines(): readonly string[] {
     return [...this.logLines];
+  }
+
+  public async invokeDidSaveForTest(document: vscode.TextDocument): Promise<void> {
+    await this.handleDidSaveTextDocument(document);
   }
 
   public resetTestHooks(): void {
@@ -228,45 +237,36 @@ export class ExtensionController implements vscode.Disposable, ExtensionApi {
 
   private async runFix(editor: vscode.TextEditor): Promise<void> {
     const document = editor.document;
-    const workspaceFolderPath = getWorkspaceFolderPath(document.uri);
-    const settings = getDocumentSettings(document);
-    const managedLayout = getManagedExecutableLayout(this.context.globalStorageUri.fsPath);
-    const executableResolution = resolveExecutablePath({
-      executableSetting: settings.executablePath,
-      logger: this.logger,
-      managed: managedLayout,
-      pathExists: (targetPath) => existsSync(targetPath),
-      workspaceFolderPath,
-    });
-
-    if (executableResolution.kind === "missing") {
-      const missingMessage =
-        executableResolution.reason === "managed-not-installed"
-          ? "No managed dfixxer executable is installed. Run \"dfixxer: Update dfixxer\" or set dfixxer.executablePath."
-          : `The configured dfixxer executable was not found: ${executableResolution.attemptedPath}`;
-      await this.showErrorMessage(missingMessage);
+    const executablePath = await this.resolveExecutableForScopedCommand(document.uri);
+    if (!executablePath) {
       return;
     }
 
     if (document.isDirty) {
+      this.suppressedSaveDocuments.add(document.uri.toString());
       const saved = await document.save();
 
       if (!saved) {
+        this.suppressedSaveDocuments.delete(document.uri.toString());
         await this.showErrorMessage(`Could not save ${path.basename(document.uri.fsPath)} before running dfixxer.`);
         return;
       }
+
+      await this.delay(50);
     }
 
+    const workspaceFolderPath = getWorkspaceFolderPath(document.uri);
+    const settings = getDocumentSettings(document);
     const configPath = resolveConfigurationPath(document, settings);
     const args = ["update", document.uri.fsPath];
     if (configPath) {
       args.push("--config", configPath);
     }
 
-    this.logger.info(`Running ${executableResolution.executablePath} ${args.join(" ")}.`);
+    this.logger.info(`Running ${executablePath} ${args.join(" ")}.`);
 
     const processRunner = this.testHooks.processRunner ?? execFileProcessRunner;
-    const processResult = await processRunner(executableResolution.executablePath, args, {
+    const processResult = await processRunner(executablePath, args, {
       cwd: workspaceFolderPath,
     });
 
@@ -296,6 +296,38 @@ export class ExtensionController implements vscode.Disposable, ExtensionApi {
 
     await vscode.commands.executeCommand("workbench.action.files.revert");
     this.logger.info(`Reloaded ${document.uri.fsPath} after a successful dfixxer update.`);
+  }
+
+  private async handleDidSaveTextDocument(document: vscode.TextDocument): Promise<void> {
+    const documentKey = document.uri.toString();
+    if (this.suppressedSaveDocuments.delete(documentKey)) {
+      this.logger.info(`Skipped save-triggered formatting for ${document.uri.fsPath} after a command-managed save.`);
+      return;
+    }
+
+    if (!isPascalDocument(document) || !isFileBackedDocument(document)) {
+      return;
+    }
+
+    const settings = getDocumentSettings(document);
+    if (!settings.formatOnSave) {
+      return;
+    }
+
+    await this.delay(50);
+    const result = await this.documentGuard.run(documentKey, async () => this.runFixFromSave(document));
+    if (!result.executed) {
+      this.logger.info(`Skipped a re-entrant save-triggered fix for ${document.uri.fsPath}.`);
+    }
+  }
+
+  private async runFixFromSave(document: vscode.TextDocument): Promise<void> {
+    const editor = await this.ensureVisibleEditor(document);
+    if (!editor) {
+      return;
+    }
+
+    await this.runFix(editor);
   }
 
   private async showErrorMessage(message: string): Promise<void> {
@@ -356,5 +388,27 @@ export class ExtensionController implements vscode.Disposable, ExtensionApi {
     }
 
     return undefined;
+  }
+
+  private async ensureVisibleEditor(document: vscode.TextDocument): Promise<vscode.TextEditor | undefined> {
+    const visibleEditor = vscode.window.visibleTextEditors.find(
+      (editor) => editor.document.uri.toString() === document.uri.toString(),
+    );
+
+    if (visibleEditor) {
+      return visibleEditor;
+    }
+
+    try {
+      return await vscode.window.showTextDocument(document, { preserveFocus: true, preview: false });
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`Could not show ${document.uri.fsPath} for reload after formatting: ${errorMessage}`);
+      return undefined;
+    }
+  }
+
+  private async delay(milliseconds: number): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, milliseconds));
   }
 }
