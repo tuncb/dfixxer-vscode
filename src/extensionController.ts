@@ -6,7 +6,7 @@ import { DocumentRunGuard } from "./documentRunGuard";
 import { isFileBackedDocument, isPascalDocument } from "./documentUtils";
 import { resolveExecutablePath } from "./executableResolution";
 import { downloadAndInstallManagedExecutable, readManagedInstallMetadata } from "./managedInstall";
-import { detectRuntimePlatform, getManagedExecutableLayout } from "./managedPaths";
+import { detectRuntimePlatform, getManagedExecutableLayout, RuntimePlatform } from "./managedPaths";
 import { createLogger, OutputChannelLike } from "./logger";
 import { ProcessRunner, execFileProcessRunner } from "./processRunner";
 import { fetchDfixxerReleases, selectCompatibleReleaseAsset } from "./releaseClient";
@@ -15,6 +15,7 @@ import { getDocumentSettings, getScopedSettings, getWorkspaceFolderPath, resolve
 interface ExtensionTestHooks {
   fetchImpl?: typeof fetch;
   processRunner?: ProcessRunner;
+  runtimePlatform?: RuntimePlatform;
   showErrorMessage?: (message: string) => Thenable<unknown>;
   showInformationMessage?: (message: string, ...items: string[]) => Thenable<string | undefined>;
   showSaveDialog?: (options: vscode.SaveDialogOptions) => Thenable<vscode.Uri | undefined>;
@@ -71,7 +72,7 @@ export class ExtensionController implements vscode.Disposable, ExtensionApi {
   }
 
   public async clearManagedInstallForTest(): Promise<void> {
-    const managedLayout = getManagedExecutableLayout(this.context.globalStorageUri.fsPath);
+    const managedLayout = this.getManagedExecutableLayout();
     try {
       await vscode.workspace.fs.delete(vscode.Uri.file(managedLayout.installDirectory), {
         recursive: true,
@@ -218,7 +219,7 @@ export class ExtensionController implements vscode.Disposable, ExtensionApi {
   private async resolveExecutableForScopedCommand(scopeUri?: vscode.Uri): Promise<string | undefined> {
     const workspaceFolderPath = scopeUri ? getWorkspaceFolderPath(scopeUri) : undefined;
     const settings = getScopedSettings(scopeUri);
-    const managedLayout = getManagedExecutableLayout(this.context.globalStorageUri.fsPath);
+    const managedLayout = this.getManagedExecutableLayout();
     const executableResolution = resolveExecutablePath({
       executableSetting: settings.executablePath,
       logger: this.logger,
@@ -264,10 +265,11 @@ export class ExtensionController implements vscode.Disposable, ExtensionApi {
     | undefined
   > {
     try {
-      const managedLayout = getManagedExecutableLayout(this.context.globalStorageUri.fsPath);
+      const runtimePlatform = this.getRuntimePlatform();
+      const managedLayout = this.getManagedExecutableLayout(runtimePlatform);
       const asset = selectCompatibleReleaseAsset(
         await fetchDfixxerReleases(this.testHooks.fetchImpl ?? fetch),
-        detectRuntimePlatform(),
+        runtimePlatform,
       );
       const currentMetadata = await readManagedInstallMetadata(managedLayout.metadataPath);
 
@@ -305,6 +307,14 @@ export class ExtensionController implements vscode.Disposable, ExtensionApi {
       );
       return undefined;
     }
+  }
+
+  private getManagedExecutableLayout(runtimePlatform = this.getRuntimePlatform()) {
+    return getManagedExecutableLayout(this.context.globalStorageUri.fsPath, runtimePlatform);
+  }
+
+  private getRuntimePlatform(): RuntimePlatform {
+    return this.testHooks.runtimePlatform ?? detectRuntimePlatform();
   }
 
   private async runFix(editor: vscode.TextEditor): Promise<void> {

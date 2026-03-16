@@ -4,6 +4,7 @@ import * as path from "node:path";
 import * as vscode from "vscode";
 import { commandIds, extensionName } from "../../constants";
 import { ExtensionApi } from "../../extensionController";
+import { RuntimePlatform } from "../../managedPaths";
 import { createTarGzArchive, createZipArchive } from "../archiveHelpers";
 
 type RuntimeFixture = {
@@ -48,8 +49,8 @@ function resolveFetchUrl(input: Parameters<typeof fetch>[0]): string {
   return input.url;
 }
 
-function getRuntimeFixture(): RuntimeFixture {
-  switch (process.platform) {
+function getRuntimeFixture(runtimePlatform: RuntimePlatform): RuntimeFixture {
+  switch (runtimePlatform.platform) {
     case "win32":
       return {
         archiveType: "zip",
@@ -75,7 +76,11 @@ suite("Update dfixxer", () => {
   const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const fakeOverridePath = workspaceRoot ? path.join(workspaceRoot, "override-dfixxer.exe") : "";
   const pascalFilePath = workspaceRoot ? path.join(workspaceRoot, "first-use-bootstrap-test.pas") : "";
-  const runtimeFixture = getRuntimeFixture();
+  const simulatedRuntimePlatform: RuntimePlatform = {
+    arch: "x64",
+    platform: process.platform,
+  };
+  const runtimeFixture = getRuntimeFixture(simulatedRuntimePlatform);
 
   suiteSetup(async () => {
     assert.ok(workspaceRoot);
@@ -98,6 +103,7 @@ suite("Update dfixxer", () => {
 
   test("prompts to install on first use and then continues the fix flow", async () => {
     const api = await getExtensionApi();
+    const errorMessages: string[] = [];
     const promptMessages: string[] = [];
     const requestedUrls: string[] = [];
     const tempArchivePath = path.join(workspaceRoot ?? "", runtimeFixture.assetName);
@@ -156,6 +162,11 @@ suite("Update dfixxer", () => {
           stdout: "",
         }));
       },
+      runtimePlatform: simulatedRuntimePlatform,
+      showErrorMessage: (message) => {
+        errorMessages.push(message);
+        return Promise.resolve(undefined);
+      },
       showInformationMessage: (message, ...items) => {
         promptMessages.push(message);
         if (message.includes("Install the managed executable now?")) {
@@ -179,6 +190,7 @@ suite("Update dfixxer", () => {
     await vscode.commands.executeCommand(commandIds.fixCurrentFile);
 
     assert.deepEqual(processCalls.map((call) => call[0]), ["version", "update"]);
+    assert.deepEqual(errorMessages, []);
     assert.match(promptMessages[0] ?? "", /Install the managed executable now/u);
     assert.equal(await fs.readFile(pascalFilePath, "utf8"), "formatted after bootstrap");
     assert.equal(
@@ -191,6 +203,7 @@ suite("Update dfixxer", () => {
 
   test("updates the managed binary, warns when an override is set, and returns no-op when already current", async () => {
     const api = await getExtensionApi();
+    const errorMessages: string[] = [];
     const tempArchivePath = path.join(workspaceRoot ?? "", runtimeFixture.assetName);
     const archiveBytes = await buildArchiveBytes(tempArchivePath, runtimeFixture);
     const infoMessages: string[] = [];
@@ -241,6 +254,11 @@ suite("Update dfixxer", () => {
           stderr: "",
           stdout: "dfixxer v9.9.9",
         }),
+      runtimePlatform: simulatedRuntimePlatform,
+      showErrorMessage: (message) => {
+        errorMessages.push(message);
+        return Promise.resolve(undefined);
+      },
       showInformationMessage: (message) => {
         infoMessages.push(message);
         return Promise.resolve(undefined);
@@ -256,6 +274,7 @@ suite("Update dfixxer", () => {
 
     assert.equal(await fs.readFile(fakeOverridePath, "utf8"), "override binary");
     assert.equal(downloadCount, 1);
+    assert.deepEqual(errorMessages, []);
     assert.deepEqual(infoMessages, [
       "Updated managed dfixxer to v9.9.9.",
       "Managed dfixxer v9.9.9 is already up to date.",
