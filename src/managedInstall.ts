@@ -1,34 +1,20 @@
-import { execFile } from "node:child_process";
 import { promises as fs } from "node:fs";
 import { createWriteStream } from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import { promisify } from "node:util";
 import extractZip from "extract-zip";
 import * as tar from "tar";
 import { Logger } from "./logger";
 import { ManagedExecutableLayout } from "./managedPaths";
+import { ProcessResult, ProcessRunner, execFileProcessRunner } from "./processRunner";
 import { CompatibleReleaseAsset } from "./releaseClient";
-
-const execFileAsync = promisify(execFile);
 
 export interface ManagedInstallMetadata {
   assetName: string;
   releaseTag: string;
 }
-
-export interface ProcessResult {
-  exitCode: number;
-  stderr: string;
-  stdout: string;
-}
-
-export type ProcessRunner = (
-  executablePath: string,
-  args: readonly string[],
-) => Promise<ProcessResult>;
 
 export interface InstallManagedExecutableOptions {
   archivePath: string;
@@ -157,7 +143,7 @@ export async function readManagedInstallMetadata(
 
 export async function validateManagedExecutable(
   executablePath: string,
-  processRunner: ProcessRunner = runProcess,
+  processRunner: ProcessRunner = execFileProcessRunner,
 ): Promise<ProcessResult> {
   const result = await processRunner(executablePath, ["version"]);
 
@@ -247,36 +233,6 @@ async function ensurePathExists(targetPath: string, message: string): Promise<vo
   });
 }
 
-async function runProcess(
-  executablePath: string,
-  args: readonly string[],
-): Promise<ProcessResult> {
-  try {
-    const result = await execFileAsync(executablePath, [...args], {
-      windowsHide: true,
-    });
-
-    return {
-      exitCode: 0,
-      stderr: result.stderr,
-      stdout: result.stdout,
-    };
-  } catch (error: unknown) {
-    const processError = error as NodeJS.ErrnoException & {
-      code?: number | string;
-      stderr?: string | Buffer;
-      stdout?: string | Buffer;
-    };
-
-    return {
-      exitCode:
-        typeof processError.code === "number" ? processError.code : 1,
-      stderr: bufferToString(processError.stderr),
-      stdout: bufferToString(processError.stdout),
-    };
-  }
-}
-
 async function pathExists(targetPath: string): Promise<boolean> {
   try {
     await fs.access(targetPath);
@@ -288,14 +244,6 @@ async function pathExists(targetPath: string): Promise<boolean> {
 
     throw error;
   }
-}
-
-function bufferToString(value: Buffer | string | undefined): string {
-  if (!value) {
-    return "";
-  }
-
-  return typeof value === "string" ? value : value.toString("utf8");
 }
 
 function isMissingPathError(error: unknown): error is NodeJS.ErrnoException {

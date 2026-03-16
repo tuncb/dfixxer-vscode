@@ -26,6 +26,29 @@
     "onCommand:dfixxer.updateExecutable"
   ],
   "contributes": {
+    "languages": [
+      {
+        "id": "pascal",
+        "aliases": [
+          "Pascal"
+        ],
+        "extensions": [
+          ".pas",
+          ".pp"
+        ]
+      },
+      {
+        "id": "objectpascal",
+        "aliases": [
+          "Object Pascal"
+        ],
+        "extensions": [
+          ".dpr",
+          ".dpk",
+          ".lpr"
+        ]
+      }
+    ],
     "commands": [
       {
         "command": "dfixxer.createConfig",

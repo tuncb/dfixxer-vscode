@@ -103,6 +103,8 @@ npm run test:extension
 ### 6. Implement `Fix Current File`
 For the active Pascal editor, save once if dirty, suppress the save hook for that single save, run `dfixxer update <file>` with optional `--config <resolved path>`, then reload the editor from disk on success.
 
+Status: complete on 2026-03-16.
+
 Acceptance criteria:
 - Dirty files are not double-formatted.
 - Non-Pascal files are rejected cleanly.
@@ -205,3 +207,4 @@ npm run package
 - Milestone 3: Runtime foundation modules now cover settings normalization, workspace-relative path expansion, managed-binary layout, deterministic executable resolution, logger output formatting, and per-document re-entrancy protection.
 - Milestone 4: Release discovery is pinned to the upstream GitHub workflow naming convention and GitHub Releases API, with tests covering draft filtering, prerelease selection, platform-specific asset mapping, and unsupported platform guidance.
 - Milestone 5: Managed installs now download into a temp workspace, extract with archive-type-specific logic, validate the candidate binary via `dfixxer version`, write metadata only after validation, and swap the install directory atomically so failed installs do not replace a working binary.
+- Milestone 6: `dfixxer.fixCurrentFile` now validates the active editor, resolves override or managed executables, saves dirty Pascal files before execution, omits `--config` when unset, reloads the editor from disk after success, and logs stdout/stderr details on failures.

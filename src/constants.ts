@@ -1,4 +1,5 @@
 export const extensionName = "dfixxer";
+export const configurationSection = extensionName;
 
 export const commandIds = {
   createConfig: "dfixxer.createConfig",

@@ -1,12 +1,11 @@
 import * as vscode from "vscode";
-import { commandIds } from "./constants";
+import { ExtensionApi, ExtensionController } from "./extensionController";
 
-export function activate(context: vscode.ExtensionContext): void {
-  context.subscriptions.push(
-    vscode.commands.registerCommand(commandIds.createConfig, () => undefined),
-    vscode.commands.registerCommand(commandIds.fixCurrentFile, () => undefined),
-    vscode.commands.registerCommand(commandIds.updateExecutable, () => undefined),
-  );
+export function activate(context: vscode.ExtensionContext): ExtensionApi {
+  const controller = new ExtensionController(context);
+  controller.register();
+  context.subscriptions.push(controller);
+  return controller;
 }
 
 export function deactivate(): void {}
