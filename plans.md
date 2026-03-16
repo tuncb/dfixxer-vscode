@@ -49,6 +49,8 @@ npm run test:extension
 ### 3. Build the execution foundation
 Add modules for settings resolution, workspace-relative path expansion, output-channel logging, and a per-document re-entrancy guard used by both manual fix and save-triggered fix flows.
 
+Status: complete on 2026-03-16.
+
 Acceptance criteria:
 - The extension can resolve an override executable path.
 - The extension can resolve a managed executable path.
@@ -179,6 +181,7 @@ npm run package
 - v1 supports only the architectures currently published by `dfixxer` releases: `win32-x64`, `linux-x64`, and `darwin-x64`.
 - `dfixxer.formatOnSave` defaults to `false` to avoid surprise writes.
 - `dfixxer.configurationFile` and `dfixxer.executablePath` support absolute paths and workspace-relative paths; empty means "use default behavior".
+- If `dfixxer.configurationFile` or `dfixxer.executablePath` is set to a relative path while no workspace folder is available, the extension preserves the unresolved relative value and reports it as such instead of guessing a base directory.
 - The extension does not register a VS Code `DocumentFormattingEditProvider` in v1; formatting is exposed through the command and the post-save hook.
 - The create-config command uses the installed `dfixxer init-config` output rather than shipping a separate template, so config shape always matches the installed binary version.
 
@@ -195,3 +198,4 @@ npm run package
 - Milestone 1: Scaffolding will use a compiled TypeScript + Mocha setup with separate Node unit tests and VS Code-hosted extension tests so later milestones can add coverage without changing the test harness.
 - Milestone 1: Validation passed with `npm ci`, `npm run compile`, `npm run lint`, `npm run test:unit`, `npm run test:extension`, and `npm test`.
 - Milestone 2: The manifest now contributes the exact `dfixxer` command and setting contract, and activation is limited to Pascal language documents or explicit `dfixxer.*` commands.
+- Milestone 3: Runtime foundation modules now cover settings normalization, workspace-relative path expansion, managed-binary layout, deterministic executable resolution, logger output formatting, and per-document re-entrancy protection.
