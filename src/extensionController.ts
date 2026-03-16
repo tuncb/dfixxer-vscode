@@ -5,7 +5,7 @@ import { commandIds, extensionName } from "./constants";
 import { DocumentRunGuard } from "./documentRunGuard";
 import { isFileBackedDocument, isPascalDocument } from "./documentUtils";
 import { resolveExecutablePath } from "./executableResolution";
-import { downloadAndInstallManagedExecutable } from "./managedInstall";
+import { downloadAndInstallManagedExecutable, readManagedInstallMetadata } from "./managedInstall";
 import { detectRuntimePlatform, getManagedExecutableLayout } from "./managedPaths";
 import { createLogger, OutputChannelLike } from "./logger";
 import { ProcessRunner, execFileProcessRunner } from "./processRunner";
@@ -23,6 +23,7 @@ interface ExtensionTestHooks {
 }
 
 export interface ExtensionApi {
+  clearManagedInstallForTest(): Promise<void>;
   getLogLines(): readonly string[];
   invokeDidSaveForTest(document: vscode.TextDocument): Promise<void>;
   resetTestHooks(): void;
@@ -61,12 +62,24 @@ export class ExtensionController implements vscode.Disposable, ExtensionApi {
       }),
       vscode.commands.registerCommand(commandIds.createConfig, async () => this.createConfig()),
       vscode.commands.registerCommand(commandIds.fixCurrentFile, async () => this.fixCurrentFile()),
-      vscode.commands.registerCommand(commandIds.updateExecutable, () => undefined),
+      vscode.commands.registerCommand(commandIds.updateExecutable, async () => this.updateExecutable()),
     );
   }
 
   public getLogLines(): readonly string[] {
     return [...this.logLines];
+  }
+
+  public async clearManagedInstallForTest(): Promise<void> {
+    const managedLayout = getManagedExecutableLayout(this.context.globalStorageUri.fsPath);
+    try {
+      await vscode.workspace.fs.delete(vscode.Uri.file(managedLayout.installDirectory), {
+        recursive: true,
+        useTrash: false,
+      });
+    } catch {
+      // Ignore missing test state.
+    }
   }
 
   public async invokeDidSaveForTest(document: vscode.TextDocument): Promise<void> {
@@ -152,6 +165,30 @@ export class ExtensionController implements vscode.Disposable, ExtensionApi {
     this.logger.info(`Created dfixxer configuration at ${targetUri.fsPath}.`);
   }
 
+  private async updateExecutable(): Promise<void> {
+    const updateResult = await this.installLatestManagedExecutable();
+    if (!updateResult) {
+      return;
+    }
+
+    if (updateResult.kind === "noop") {
+      await this.showInformationMessage(
+        `Managed dfixxer ${updateResult.metadata.releaseTag} is already up to date.`,
+      );
+    } else {
+      await this.showInformationMessage(
+        `Updated managed dfixxer to ${updateResult.metadata.releaseTag}.`,
+      );
+    }
+
+    const scopedSettings = getScopedSettings(this.getPreferredScopeUri());
+    if (scopedSettings.executablePath.length > 0) {
+      await this.showWarningMessage(
+        "dfixxer.executablePath is set, so the configured override remains authoritative over the managed executable.",
+      );
+    }
+  }
+
   private async fixCurrentFile(): Promise<void> {
     const editor = vscode.window.activeTextEditor;
 
@@ -211,11 +248,42 @@ export class ExtensionController implements vscode.Disposable, ExtensionApi {
       return undefined;
     }
 
+    const updateResult = await this.installLatestManagedExecutable();
+    return updateResult?.executablePath;
+  }
+
+  private async installLatestManagedExecutable(): Promise<
+    | {
+        executablePath: string;
+        kind: "installed" | "noop";
+        metadata: {
+          assetName: string;
+          releaseTag: string;
+        };
+      }
+    | undefined
+  > {
     try {
+      const managedLayout = getManagedExecutableLayout(this.context.globalStorageUri.fsPath);
       const asset = selectCompatibleReleaseAsset(
         await fetchDfixxerReleases(this.testHooks.fetchImpl ?? fetch),
         detectRuntimePlatform(),
       );
+      const currentMetadata = await readManagedInstallMetadata(managedLayout.metadataPath);
+
+      if (
+        currentMetadata &&
+        currentMetadata.releaseTag === asset.releaseTag &&
+        existsSync(managedLayout.executablePath)
+      ) {
+        this.logger.info(`Managed dfixxer ${currentMetadata.releaseTag} is already current.`);
+        return {
+          executablePath: managedLayout.executablePath,
+          kind: "noop",
+          metadata: currentMetadata,
+        };
+      }
+
       const installResult = await downloadAndInstallManagedExecutable({
         asset,
         fetchImpl: this.testHooks.fetchImpl,
@@ -224,7 +292,11 @@ export class ExtensionController implements vscode.Disposable, ExtensionApi {
         processRunner: this.testHooks.processRunner,
       });
 
-      return installResult.executablePath;
+      return {
+        executablePath: installResult.executablePath,
+        kind: "installed",
+        metadata: installResult.metadata,
+      };
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.logger.error(`Managed dfixxer installation failed: ${errorMessage}`);
@@ -388,6 +460,15 @@ export class ExtensionController implements vscode.Disposable, ExtensionApi {
     }
 
     return undefined;
+  }
+
+  private getPreferredScopeUri(): vscode.Uri | undefined {
+    const activeDocument = vscode.window.activeTextEditor?.document;
+    if (activeDocument) {
+      return activeDocument.uri;
+    }
+
+    return vscode.workspace.workspaceFolders?.[0]?.uri;
   }
 
   private async ensureVisibleEditor(document: vscode.TextDocument): Promise<vscode.TextEditor | undefined> {

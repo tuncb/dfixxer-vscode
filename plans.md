@@ -154,6 +154,8 @@ npm run test:extension
 ### 9. Implement `Update dfixxer` and first-use bootstrap
 Add a command that installs or updates the managed binary to the latest compatible release, including prereleases; if the installed tag already matches, return a no-op status.
 
+Status: complete on 2026-03-16.
+
 Acceptance criteria:
 - First use of fix or create-config prompts to install when no managed binary exists.
 - Update touches only the managed binary.
@@ -215,3 +217,4 @@ npm run package
 - Milestone 6: `dfixxer.fixCurrentFile` now validates the active editor, resolves override or managed executables, saves dirty Pascal files before execution, omits `--config` when unset, reloads the editor from disk after success, and logs stdout/stderr details on failures.
 - Milestone 7: `dfixxer.createConfig` now prefills a deterministic save target, confirms before overwriting, resolves or installs an executable before use, runs `dfixxer init-config <target>`, and opens the created file after success.
 - Milestone 8: Auto-format now subscribes to post-save events, processes only Pascal/Object Pascal file-backed documents when enabled, suppresses the single save triggered by the manual fix command, and avoids retry loops after failures.
+- Milestone 9: First-use flows for manual fix and create-config now prompt to install the managed binary when needed, `dfixxer.updateExecutable` installs or no-ops against the latest compatible prerelease-aware asset, and the command warns when `dfixxer.executablePath` still overrides the managed copy.
