@@ -84,6 +84,8 @@ npm run test:unit
 ### 5. Implement managed download and install
 Download the selected asset to a temp directory, extract it, validate the binary with `dfixxer version`, then atomically replace the managed binary and write metadata.
 
+Status: complete on 2026-03-16.
+
 Acceptance criteria:
 - Windows zip installs work.
 - Unix tar.gz installs work.
@@ -202,3 +204,4 @@ npm run package
 - Milestone 2: The manifest now contributes the exact `dfixxer` command and setting contract, and activation is limited to Pascal language documents or explicit `dfixxer.*` commands.
 - Milestone 3: Runtime foundation modules now cover settings normalization, workspace-relative path expansion, managed-binary layout, deterministic executable resolution, logger output formatting, and per-document re-entrancy protection.
 - Milestone 4: Release discovery is pinned to the upstream GitHub workflow naming convention and GitHub Releases API, with tests covering draft filtering, prerelease selection, platform-specific asset mapping, and unsupported platform guidance.
+- Milestone 5: Managed installs now download into a temp workspace, extract with archive-type-specific logic, validate the candidate binary via `dfixxer version`, write metadata only after validation, and swap the install directory atomically so failed installs do not replace a working binary.
