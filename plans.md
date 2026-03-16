@@ -120,6 +120,8 @@ npm run test:extension
 ### 7. Implement `Create Configuration File`
 Prompt with a save dialog prefilled to `<workspace root>/dfixxer.toml`; if no workspace exists, fall back to the active file’s folder or an empty save dialog; confirm before overwriting because `dfixxer init-config` overwrites existing files.
 
+Status: complete on 2026-03-16.
+
 Acceptance criteria:
 - The command resolves or installs the executable before use.
 - The command runs `dfixxer init-config <target>`.
@@ -188,6 +190,7 @@ npm run package
 - `dfixxer.formatOnSave` defaults to `false` to avoid surprise writes.
 - `dfixxer.configurationFile` and `dfixxer.executablePath` support absolute paths and workspace-relative paths; empty means "use default behavior".
 - If `dfixxer.configurationFile` or `dfixxer.executablePath` is set to a relative path while no workspace folder is available, the extension preserves the unresolved relative value and reports it as such instead of guessing a base directory.
+- In multi-root workspaces, create-config prefills the save target from the active document’s workspace folder; if there is no active document, it uses the first workspace folder.
 - The extension does not register a VS Code `DocumentFormattingEditProvider` in v1; formatting is exposed through the command and the post-save hook.
 - The create-config command uses the installed `dfixxer init-config` output rather than shipping a separate template, so config shape always matches the installed binary version.
 
@@ -208,3 +211,4 @@ npm run package
 - Milestone 4: Release discovery is pinned to the upstream GitHub workflow naming convention and GitHub Releases API, with tests covering draft filtering, prerelease selection, platform-specific asset mapping, and unsupported platform guidance.
 - Milestone 5: Managed installs now download into a temp workspace, extract with archive-type-specific logic, validate the candidate binary via `dfixxer version`, write metadata only after validation, and swap the install directory atomically so failed installs do not replace a working binary.
 - Milestone 6: `dfixxer.fixCurrentFile` now validates the active editor, resolves override or managed executables, saves dirty Pascal files before execution, omits `--config` when unset, reloads the editor from disk after success, and logs stdout/stderr details on failures.
+- Milestone 7: `dfixxer.createConfig` now prefills a deterministic save target, confirms before overwriting, resolves or installs an executable before use, runs `dfixxer init-config <target>`, and opens the created file after success.

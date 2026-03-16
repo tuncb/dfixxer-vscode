@@ -5,14 +5,21 @@ import { commandIds, extensionName } from "./constants";
 import { DocumentRunGuard } from "./documentRunGuard";
 import { isFileBackedDocument, isPascalDocument } from "./documentUtils";
 import { resolveExecutablePath } from "./executableResolution";
+import { downloadAndInstallManagedExecutable } from "./managedInstall";
+import { detectRuntimePlatform, getManagedExecutableLayout } from "./managedPaths";
 import { createLogger, OutputChannelLike } from "./logger";
-import { getManagedExecutableLayout } from "./managedPaths";
 import { ProcessRunner, execFileProcessRunner } from "./processRunner";
-import { getDocumentSettings, getWorkspaceFolderPath, resolveConfigurationPath } from "./vscodeSettings";
+import { fetchDfixxerReleases, selectCompatibleReleaseAsset } from "./releaseClient";
+import { getDocumentSettings, getScopedSettings, getWorkspaceFolderPath, resolveConfigurationPath } from "./vscodeSettings";
 
 interface ExtensionTestHooks {
+  fetchImpl?: typeof fetch;
   processRunner?: ProcessRunner;
   showErrorMessage?: (message: string) => Thenable<unknown>;
+  showInformationMessage?: (message: string, ...items: string[]) => Thenable<string | undefined>;
+  showSaveDialog?: (options: vscode.SaveDialogOptions) => Thenable<vscode.Uri | undefined>;
+  showTextDocument?: (document: vscode.TextDocument) => Thenable<unknown>;
+  showWarningMessage?: (message: string, ...items: string[]) => Thenable<string | undefined>;
 }
 
 export interface ExtensionApi {
@@ -47,7 +54,7 @@ export class ExtensionController implements vscode.Disposable, ExtensionApi {
   public register(): void {
     this.context.subscriptions.push(
       this.outputChannel,
-      vscode.commands.registerCommand(commandIds.createConfig, () => undefined),
+      vscode.commands.registerCommand(commandIds.createConfig, async () => this.createConfig()),
       vscode.commands.registerCommand(commandIds.fixCurrentFile, async () => this.fixCurrentFile()),
       vscode.commands.registerCommand(commandIds.updateExecutable, () => undefined),
     );
@@ -73,6 +80,69 @@ export class ExtensionController implements vscode.Disposable, ExtensionApi {
     this.outputChannel.dispose();
   }
 
+  private async createConfig(): Promise<void> {
+    const defaultTargetUri = this.getDefaultConfigTargetUri();
+    const targetUri = await this.showSaveDialog({
+      defaultUri: defaultTargetUri,
+      filters: {
+        TOML: ["toml"],
+      },
+      saveLabel: "Create dfixxer Configuration",
+      title: "Create dfixxer configuration file",
+    });
+
+    if (!targetUri) {
+      return;
+    }
+
+    if (existsSync(targetUri.fsPath)) {
+      const overwriteChoice = await this.showWarningMessage(
+        `${path.basename(targetUri.fsPath)} already exists and dfixxer init-config will overwrite it.`,
+        "Overwrite",
+        "Cancel",
+      );
+
+      if (overwriteChoice !== "Overwrite") {
+        return;
+      }
+    }
+
+    const executablePath = await this.resolveExecutableForScopedCommand(targetUri);
+    if (!executablePath) {
+      return;
+    }
+
+    const processRunner = this.testHooks.processRunner ?? execFileProcessRunner;
+    const processResult = await processRunner(
+      executablePath,
+      ["init-config", targetUri.fsPath],
+      {
+        cwd: vscode.workspace.getWorkspaceFolder(targetUri)?.uri.fsPath ?? path.dirname(targetUri.fsPath),
+      },
+    );
+
+    if (processResult.exitCode !== 0) {
+      this.logger.error(
+        `dfixxer init-config failed for ${targetUri.fsPath} with exit code ${processResult.exitCode}.`,
+      );
+      if (processResult.stdout.length > 0) {
+        this.logger.error(`stdout: ${processResult.stdout}`);
+      }
+      if (processResult.stderr.length > 0) {
+        this.logger.error(`stderr: ${processResult.stderr}`);
+      }
+
+      await this.showErrorMessage(
+        `dfixxer failed to create ${path.basename(targetUri.fsPath)}. See the dfixxer output channel for details.`,
+      );
+      return;
+    }
+
+    const createdDocument = await vscode.workspace.openTextDocument(targetUri);
+    await this.showTextDocument(createdDocument);
+    this.logger.info(`Created dfixxer configuration at ${targetUri.fsPath}.`);
+  }
+
   private async fixCurrentFile(): Promise<void> {
     const editor = vscode.window.activeTextEditor;
 
@@ -96,6 +166,63 @@ export class ExtensionController implements vscode.Disposable, ExtensionApi {
 
     if (!result.executed) {
       this.logger.info(`Skipped a re-entrant fix request for ${document.uri.fsPath}.`);
+    }
+  }
+
+  private async resolveExecutableForScopedCommand(scopeUri?: vscode.Uri): Promise<string | undefined> {
+    const workspaceFolderPath = scopeUri ? getWorkspaceFolderPath(scopeUri) : undefined;
+    const settings = getScopedSettings(scopeUri);
+    const managedLayout = getManagedExecutableLayout(this.context.globalStorageUri.fsPath);
+    const executableResolution = resolveExecutablePath({
+      executableSetting: settings.executablePath,
+      logger: this.logger,
+      managed: managedLayout,
+      pathExists: (targetPath) => existsSync(targetPath),
+      workspaceFolderPath,
+    });
+
+    if (executableResolution.kind === "override" || executableResolution.kind === "managed") {
+      return executableResolution.executablePath;
+    }
+
+    if (executableResolution.reason === "override-not-found") {
+      await this.showErrorMessage(
+        `The configured dfixxer executable was not found: ${executableResolution.attemptedPath}`,
+      );
+      return undefined;
+    }
+
+    const installChoice = await this.showInformationMessage(
+      "dfixxer is not installed yet. Install the managed executable now?",
+      "Install",
+      "Cancel",
+    );
+
+    if (installChoice !== "Install") {
+      return undefined;
+    }
+
+    try {
+      const asset = selectCompatibleReleaseAsset(
+        await fetchDfixxerReleases(this.testHooks.fetchImpl ?? fetch),
+        detectRuntimePlatform(),
+      );
+      const installResult = await downloadAndInstallManagedExecutable({
+        asset,
+        fetchImpl: this.testHooks.fetchImpl,
+        logger: this.logger,
+        managed: managedLayout,
+        processRunner: this.testHooks.processRunner,
+      });
+
+      return installResult.executablePath;
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Managed dfixxer installation failed: ${errorMessage}`);
+      await this.showErrorMessage(
+        `dfixxer could not be installed automatically. ${errorMessage}`,
+      );
+      return undefined;
     }
   }
 
@@ -178,5 +305,56 @@ export class ExtensionController implements vscode.Disposable, ExtensionApi {
     }
 
     await vscode.window.showErrorMessage(message);
+  }
+
+  private async showInformationMessage(message: string, ...items: string[]): Promise<string | undefined> {
+    if (this.testHooks.showInformationMessage) {
+      return this.testHooks.showInformationMessage(message, ...items);
+    }
+
+    return vscode.window.showInformationMessage(message, ...items);
+  }
+
+  private async showSaveDialog(options: vscode.SaveDialogOptions): Promise<vscode.Uri | undefined> {
+    if (this.testHooks.showSaveDialog) {
+      return this.testHooks.showSaveDialog(options);
+    }
+
+    return vscode.window.showSaveDialog(options);
+  }
+
+  private async showTextDocument(document: vscode.TextDocument): Promise<void> {
+    if (this.testHooks.showTextDocument) {
+      await this.testHooks.showTextDocument(document);
+      return;
+    }
+
+    await vscode.window.showTextDocument(document);
+  }
+
+  private async showWarningMessage(message: string, ...items: string[]): Promise<string | undefined> {
+    if (this.testHooks.showWarningMessage) {
+      return this.testHooks.showWarningMessage(message, ...items);
+    }
+
+    return vscode.window.showWarningMessage(message, ...items);
+  }
+
+  private getDefaultConfigTargetUri(): vscode.Uri | undefined {
+    const activeDocument = vscode.window.activeTextEditor?.document;
+    const activeWorkspaceFolder = activeDocument
+      ? vscode.workspace.getWorkspaceFolder(activeDocument.uri)?.uri
+      : undefined;
+    const workspaceFolderUri = activeWorkspaceFolder ?? vscode.workspace.workspaceFolders?.[0]?.uri;
+
+    if (workspaceFolderUri) {
+      return vscode.Uri.joinPath(workspaceFolderUri, "dfixxer.toml");
+    }
+
+    if (activeDocument && isFileBackedDocument(activeDocument)) {
+      return vscode.Uri.file(path.join(path.dirname(activeDocument.uri.fsPath), "dfixxer.toml"));
+    }
+
+    return undefined;
   }
 }

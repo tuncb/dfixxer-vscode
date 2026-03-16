@@ -2,14 +2,18 @@ import * as vscode from "vscode";
 import { configurationKeys, extensionName } from "./constants";
 import { DfixxerSettings, normalizeSettings, resolveSettingPath } from "./settings";
 
-export function getDocumentSettings(document: vscode.TextDocument): DfixxerSettings {
-  const configuration = vscode.workspace.getConfiguration(extensionName, document);
+export function getScopedSettings(scope?: vscode.ConfigurationScope): DfixxerSettings {
+  const configuration = vscode.workspace.getConfiguration(extensionName, scope);
 
   return normalizeSettings({
     configurationFile: configuration.get<string>(configurationKeys.configurationFile, ""),
     executablePath: configuration.get<string>(configurationKeys.executablePath, ""),
     formatOnSave: configuration.get<boolean>(configurationKeys.formatOnSave, false),
   });
+}
+
+export function getDocumentSettings(document: vscode.TextDocument): DfixxerSettings {
+  return getScopedSettings(document);
 }
 
 export function getWorkspaceFolderPath(uri: vscode.Uri): string | undefined {
