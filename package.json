@@ -5,7 +5,6 @@
   "version": "0.0.1",
   "publisher": "tuncb",
   "license": "MIT",
-  "private": true,
   "repository": {
     "type": "git",
     "url": "https://github.com/tuncb/dfixxer-vscode.git"
@@ -16,6 +15,12 @@
   },
   "categories": [
     "Other"
+  ],
+  "keywords": [
+    "pascal",
+    "delphi",
+    "formatter",
+    "dfixxer"
   ],
   "main": "./out/extension.js",
   "activationEvents": [

@@ -172,6 +172,8 @@ npm run test:extension
 ### 10. Finish release readiness
 Add README usage docs, settings docs, platform support notes, CI mirroring the reference extension’s Node 22 compile/lint/test flow across Windows, macOS, and Linux, and VSIX packaging.
 
+Status: complete on 2026-03-16.
+
 Acceptance criteria:
 - The repo produces an installable `.vsix`.
 - CI covers unit tests and extension tests.
@@ -205,7 +207,7 @@ npm run package
 - [x] `npm run test:unit`
 - [x] `npm run test:extension`
 - [x] `npm test`
-- [ ] `npm run package`
+- [x] `npm run package`
 
 ## Implementation Notes
 - Milestone 1: Scaffolding will use a compiled TypeScript + Mocha setup with separate Node unit tests and VS Code-hosted extension tests so later milestones can add coverage without changing the test harness.
@@ -218,3 +220,4 @@ npm run package
 - Milestone 7: `dfixxer.createConfig` now prefills a deterministic save target, confirms before overwriting, resolves or installs an executable before use, runs `dfixxer init-config <target>`, and opens the created file after success.
 - Milestone 8: Auto-format now subscribes to post-save events, processes only Pascal/Object Pascal file-backed documents when enabled, suppresses the single save triggered by the manual fix command, and avoids retry loops after failures.
 - Milestone 9: First-use flows for manual fix and create-config now prompt to install the managed binary when needed, `dfixxer.updateExecutable` installs or no-ops against the latest compatible prerelease-aware asset, and the command warns when `dfixxer.executablePath` still overrides the managed copy.
+- Milestone 10: Release-readiness documentation, CI, packaging metadata, and `.vscodeignore` are complete, and final validation passed with `npm run lint`, `npm test`, and `npm run package`.

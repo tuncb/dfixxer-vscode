@@ -1,9 +1,14 @@
 .vscode/**
 .vscode-test/**
 src/**
+out/test/**
 tsconfig.json
 eslint.config.mjs
 implement.md
 plans.md
 documentation.md
+.github/**
+.mocharc.unit.json
+test-fixtures/**
+**/*.map
 **/*.ts

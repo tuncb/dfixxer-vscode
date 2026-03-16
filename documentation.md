@@ -10,3 +10,4 @@
 - Milestone 7 complete: `Create Configuration File` now chooses a sensible default target, confirms overwrite, ensures `dfixxer` is available, runs `init-config`, and opens the resulting TOML file.
 - Milestone 8 complete: format-on-save now reuses the same fix pipeline, runs only for Pascal/Object Pascal files, skips non-file documents, suppresses command-managed saves, and avoids repeated failure retries.
 - Milestone 9 complete: first-use install prompts now cover fix and create-config, and `Update dfixxer` installs or no-ops the managed binary while warning if an explicit executable override remains in effect.
+- Milestone 10 complete: README usage docs, CI, VSIX packaging, and final validation are in place. The repo now produces `dfixxer-vscode-0.0.1.vsix`.
