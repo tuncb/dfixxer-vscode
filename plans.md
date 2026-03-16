@@ -66,6 +66,8 @@ npm run test:unit
 ### 4. Implement GitHub release discovery
 Add a release client that queries `tuncb/dfixxer` releases, ignores drafts, includes prereleases by default, and selects the first compatible asset for the current platform.
 
+Status: complete on 2026-03-16.
+
 Acceptance criteria:
 - Asset mapping matches the existing release workflow names exactly:
   - `dfixxer-windows-x86_64-<tag>.zip`
@@ -199,3 +201,4 @@ npm run package
 - Milestone 1: Validation passed with `npm ci`, `npm run compile`, `npm run lint`, `npm run test:unit`, `npm run test:extension`, and `npm test`.
 - Milestone 2: The manifest now contributes the exact `dfixxer` command and setting contract, and activation is limited to Pascal language documents or explicit `dfixxer.*` commands.
 - Milestone 3: Runtime foundation modules now cover settings normalization, workspace-relative path expansion, managed-binary layout, deterministic executable resolution, logger output formatting, and per-document re-entrancy protection.
+- Milestone 4: Release discovery is pinned to the upstream GitHub workflow naming convention and GitHub Releases API, with tests covering draft filtering, prerelease selection, platform-specific asset mapping, and unsupported platform guidance.
