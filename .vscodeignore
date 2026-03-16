@@ -1,0 +1,9 @@
+.vscode/**
+.vscode-test/**
+src/**
+tsconfig.json
+eslint.config.mjs
+implement.md
+plans.md
+documentation.md
+**/*.ts

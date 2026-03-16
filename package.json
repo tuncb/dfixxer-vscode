@@ -1,0 +1,51 @@
+{
+  "name": "dfixxer-vscode",
+  "displayName": "dfixxer",
+  "description": "VS Code integration for the dfixxer Pascal formatter.",
+  "version": "0.0.1",
+  "publisher": "tuncb",
+  "license": "MIT",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tuncb/dfixxer-vscode.git"
+  },
+  "engines": {
+    "vscode": "^1.97.0",
+    "node": ">=22"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "commands": [],
+    "configuration": {
+      "title": "dfixxer",
+      "properties": {}
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -w -p ./",
+    "lint": "eslint \"src/**/*.ts\"",
+    "test:unit": "mocha --config .mocharc.unit.json",
+    "test:extension": "node ./out/test/runTest.js",
+    "test": "npm run compile && npm run lint && npm run test:unit && npm run test:extension",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.21.0",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^22.13.10",
+    "@types/vscode": "^1.97.0",
+    "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^3.2.2",
+    "eslint": "^9.21.0",
+    "glob": "^11.0.1",
+    "mocha": "^11.1.0",
+    "typescript-eslint": "^8.25.0",
+    "typescript": "^5.8.2"
+  }
+}
