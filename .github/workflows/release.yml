@@ -1,0 +1,65 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate tag matches package version
+        env:
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+        run: |
+          node -e "const pkg = require('./package.json'); const tag = process.env.GITHUB_REF_NAME; const expectedTag = `v${pkg.version}`; if (tag !== expectedTag) { throw new Error(`Tag ${tag} does not match package.json version ${pkg.version}. Expected ${expectedTag}.`); }"
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Compile
+        run: npm run compile
+
+      - name: Unit tests
+        run: npm run test:unit
+
+      - name: Extension tests
+        run: xvfb-run -a npm run test:extension
+
+      - name: Package extension
+        env:
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+        run: |
+          mkdir -p dist
+          npx @vscode/vsce package --out "dist/dfixxer-vscode-${GITHUB_REF_NAME}.vsix"
+
+      - name: Create or update GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+        run: |
+          asset="dist/dfixxer-vscode-${GITHUB_REF_NAME}.vsix"
+
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release upload "${GITHUB_REF_NAME}" "${asset}" --clobber
+          else
+            gh release create "${GITHUB_REF_NAME}" "${asset}" --generate-notes --verify-tag
+          fi
