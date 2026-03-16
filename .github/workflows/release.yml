@@ -30,7 +30,17 @@ jobs:
         env:
           GITHUB_REF_NAME: ${{ github.ref_name }}
         run: |
-          node -e "const pkg = require('./package.json'); const tag = process.env.GITHUB_REF_NAME; const expectedTag = `v${pkg.version}`; if (tag !== expectedTag) { throw new Error(`Tag ${tag} does not match package.json version ${pkg.version}. Expected ${expectedTag}.`); }"
+          node - <<'NODE'
+          const pkg = require("./package.json");
+          const tag = process.env.GITHUB_REF_NAME;
+          const expectedTag = `v${pkg.version}`;
+
+          if (tag !== expectedTag) {
+            throw new Error(
+              `Tag ${tag} does not match package.json version ${pkg.version}. Expected ${expectedTag}.`
+            );
+          }
+          NODE
 
       - name: Lint
         run: npm run lint
