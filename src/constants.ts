@@ -1,0 +1,15 @@
+export const extensionName = "dfixxer";
+
+export const commandIds = {
+  createConfig: "dfixxer.createConfig",
+  fixCurrentFile: "dfixxer.fixCurrentFile",
+  updateExecutable: "dfixxer.updateExecutable",
+} as const;
+
+export const supportedLanguageIds = ["pascal", "objectpascal"] as const;
+
+export const configurationKeys = {
+  configurationFile: "configurationFile",
+  executablePath: "executablePath",
+  formatOnSave: "formatOnSave",
+} as const;

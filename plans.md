@@ -33,6 +33,8 @@ npm test
 ### 2. Define the manifest contract
 Register Pascal activation events, the three commands, and the three settings with the exact defaults above; use the `dfixxer` namespace for commands and configuration.
 
+Status: complete on 2026-03-16.
+
 Acceptance criteria:
 - Commands are visible in VS Code.
 - Settings are visible in VS Code.
@@ -192,3 +194,4 @@ npm run package
 ## Implementation Notes
 - Milestone 1: Scaffolding will use a compiled TypeScript + Mocha setup with separate Node unit tests and VS Code-hosted extension tests so later milestones can add coverage without changing the test harness.
 - Milestone 1: Validation passed with `npm ci`, `npm run compile`, `npm run lint`, `npm run test:unit`, `npm run test:extension`, and `npm test`.
+- Milestone 2: The manifest now contributes the exact `dfixxer` command and setting contract, and activation is limited to Pascal language documents or explicit `dfixxer.*` commands.
