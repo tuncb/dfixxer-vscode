@@ -1,4 +1,5 @@
 import * as assert from "node:assert/strict";
+import * as path from "node:path";
 import { resolveExecutablePath } from "../../executableResolution";
 import { createLogger, OutputChannelLike } from "../../logger";
 import { getManagedExecutableLayout } from "../../managedPaths";
@@ -12,6 +13,10 @@ class MemoryChannel implements OutputChannelLike {
   }
 }
 
+const workspaceFolderPath = path.resolve("repo");
+const overrideExecutablePath = path.join(workspaceFolderPath, "tools", "dfixxer.exe");
+const managedStoragePath = path.resolve("storage");
+
 describe("settings resolution", () => {
   it("normalizes empty settings to documented defaults", () => {
     assert.deepEqual(normalizeSettings({}), {
@@ -22,11 +27,11 @@ describe("settings resolution", () => {
   });
 
   it("expands workspace-relative settings", () => {
-    assert.deepEqual(resolveSettingPath("tools/dfixxer.exe", { workspaceFolderPath: "C:\\repo" }), {
+    assert.deepEqual(resolveSettingPath("tools/dfixxer.exe", { workspaceFolderPath }), {
       kind: "workspaceRelative",
       input: "tools/dfixxer.exe",
-      resolvedPath: "C:\\repo\\tools\\dfixxer.exe",
-      workspaceFolderPath: "C:\\repo",
+      resolvedPath: overrideExecutablePath,
+      workspaceFolderPath,
     });
   });
 
@@ -40,13 +45,15 @@ describe("settings resolution", () => {
 
 describe("managed executable layout", () => {
   it("uses a platform-specific bin folder and metadata file", () => {
+    const installDirectory = path.join(managedStoragePath, "bin", "win32-x64");
+
     assert.deepEqual(
-      getManagedExecutableLayout("C:\\storage", { platform: "win32", arch: "x64" }),
+      getManagedExecutableLayout(managedStoragePath, { platform: "win32", arch: "x64" }),
       {
         executableName: "dfixxer.exe",
-        executablePath: "C:\\storage\\bin\\win32-x64\\dfixxer.exe",
-        installDirectory: "C:\\storage\\bin\\win32-x64",
-        metadataPath: "C:\\storage\\bin\\win32-x64\\metadata.json",
+        executablePath: path.join(installDirectory, "dfixxer.exe"),
+        installDirectory,
+        metadataPath: path.join(installDirectory, "metadata.json"),
         platformArch: "win32-x64",
       },
     );
@@ -58,21 +65,21 @@ describe("resolveExecutablePath", () => {
     const channel = new MemoryChannel();
     const resolution = resolveExecutablePath({
       executableSetting: "tools/dfixxer.exe",
-      managed: getManagedExecutableLayout("C:\\storage", { platform: "win32", arch: "x64" }),
+      managed: getManagedExecutableLayout(managedStoragePath, { platform: "win32", arch: "x64" }),
       logger: createLogger(channel, () => new Date("2026-03-16T12:00:00.000Z")),
-      pathExists: (targetPath) => targetPath === "C:\\repo\\tools\\dfixxer.exe",
-      workspaceFolderPath: "C:\\repo",
+      pathExists: (targetPath) => targetPath === overrideExecutablePath,
+      workspaceFolderPath,
     });
 
     assert.deepEqual(resolution, {
       kind: "override",
-      executablePath: "C:\\repo\\tools\\dfixxer.exe",
+      executablePath: overrideExecutablePath,
       source: "setting",
       setting: {
         kind: "workspaceRelative",
         input: "tools/dfixxer.exe",
-        resolvedPath: "C:\\repo\\tools\\dfixxer.exe",
-        workspaceFolderPath: "C:\\repo",
+        resolvedPath: overrideExecutablePath,
+        workspaceFolderPath,
       },
     });
     assert.match(channel.lines[0], /Resolved executable from dfixxer\.executablePath/u);
@@ -80,7 +87,7 @@ describe("resolveExecutablePath", () => {
 
   it("falls back to the managed executable path", () => {
     const channel = new MemoryChannel();
-    const managed = getManagedExecutableLayout("C:\\storage", { platform: "win32", arch: "x64" });
+    const managed = getManagedExecutableLayout(managedStoragePath, { platform: "win32", arch: "x64" });
     const resolution = resolveExecutablePath({
       executableSetting: "",
       managed,
@@ -99,7 +106,7 @@ describe("resolveExecutablePath", () => {
 
   it("returns a deterministic missing state when no executable is available", () => {
     const channel = new MemoryChannel();
-    const managed = getManagedExecutableLayout("C:\\storage", { platform: "win32", arch: "x64" });
+    const managed = getManagedExecutableLayout(managedStoragePath, { platform: "win32", arch: "x64" });
     const resolution = resolveExecutablePath({
       executableSetting: "",
       managed,
