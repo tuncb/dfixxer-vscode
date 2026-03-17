@@ -12,7 +12,7 @@
 
 ## First Run
 
-If `dfixxer.executablePath` is empty and no managed binary is installed yet, the extension prompts to install the latest compatible `dfixxer` release the first time you run:
+If `dfixxer.executablePath` is empty and no managed binary is installed yet, the extension prompts to install the pinned `dfixxer` release `v0.11.1` the first time you run:
 
 - `dfixxer: Fix Current File`
 - `dfixxer: Create Configuration File`
@@ -44,9 +44,8 @@ If your platform is unsupported, point `dfixxer.executablePath` at a compatible 
 
 ### `dfixxer: Update dfixxer`
 
-- Downloads or updates the managed executable to the latest compatible release
-- Includes prereleases by default
-- Returns a no-op when the installed managed tag already matches the latest compatible tag
+- Downloads or updates the managed executable to the pinned `v0.11.1` release
+- Returns a no-op when the installed managed tag already matches `v0.11.1`
 - Still updates the managed copy when `dfixxer.executablePath` is set, but warns that the override remains authoritative
 
 ## Settings
@@ -88,6 +87,6 @@ npm run package
 ## Releases
 
 - Pushing a tag named `v*` triggers the GitHub release workflow.
-- The tag must match `package.json` exactly, for example `package.json` version `0.0.2` requires tag `v0.0.2`.
+- The tag must match `package.json` exactly, for example `package.json` version `0.0.3` requires tag `v0.0.3`.
 - The workflow verifies Windows `x64`, Linux `x64`, macOS `x64`, and macOS `arm64`, then packages the extension and uploads the generated `.vsix` to the GitHub release for that tag.
 - No Visual Studio Marketplace publish step runs in this workflow.

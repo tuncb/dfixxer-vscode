@@ -9,7 +9,7 @@ import { downloadAndInstallManagedExecutable, readManagedInstallMetadata } from 
 import { detectRuntimePlatform, getManagedExecutableLayout, RuntimePlatform } from "./managedPaths";
 import { createLogger, OutputChannelLike } from "./logger";
 import { ProcessRunner, execFileProcessRunner } from "./processRunner";
-import { fetchDfixxerReleases, selectCompatibleReleaseAsset } from "./releaseClient";
+import { fetchPinnedDfixxerRelease, selectCompatibleReleaseAsset } from "./releaseClient";
 import { getDocumentSettings, getScopedSettings, getWorkspaceFolderPath, resolveConfigurationPath } from "./vscodeSettings";
 
 interface ExtensionTestHooks {
@@ -167,7 +167,7 @@ export class ExtensionController implements vscode.Disposable, ExtensionApi {
   }
 
   private async updateExecutable(): Promise<void> {
-    const updateResult = await this.installLatestManagedExecutable();
+    const updateResult = await this.installManagedExecutable();
     if (!updateResult) {
       return;
     }
@@ -249,11 +249,11 @@ export class ExtensionController implements vscode.Disposable, ExtensionApi {
       return undefined;
     }
 
-    const updateResult = await this.installLatestManagedExecutable();
+    const updateResult = await this.installManagedExecutable();
     return updateResult?.executablePath;
   }
 
-  private async installLatestManagedExecutable(): Promise<
+  private async installManagedExecutable(): Promise<
     | {
         executablePath: string;
         kind: "installed" | "noop";
@@ -268,7 +268,7 @@ export class ExtensionController implements vscode.Disposable, ExtensionApi {
       const runtimePlatform = this.getRuntimePlatform();
       const managedLayout = this.getManagedExecutableLayout(runtimePlatform);
       const asset = selectCompatibleReleaseAsset(
-        await fetchDfixxerReleases(this.testHooks.fetchImpl ?? fetch),
+        await fetchPinnedDfixxerRelease(this.testHooks.fetchImpl ?? fetch),
         runtimePlatform,
       );
       const currentMetadata = await readManagedInstallMetadata(managedLayout.metadataPath);

@@ -2,7 +2,7 @@ import * as assert from "node:assert/strict";
 import { promises as fs } from "node:fs";
 import * as path from "node:path";
 import * as vscode from "vscode";
-import { commandIds, extensionName } from "../../constants";
+import { commandIds, extensionName, managedDfixxerReleaseTag } from "../../constants";
 import { ExtensionApi } from "../../extensionController";
 import { RuntimePlatform } from "../../managedPaths";
 import { createTarGzArchive, createZipArchive } from "../archiveHelpers";
@@ -54,13 +54,13 @@ function getRuntimeFixture(runtimePlatform: RuntimePlatform): RuntimeFixture {
     case "win32":
       return {
         archiveType: "zip",
-        assetName: "dfixxer-windows-x86_64-v9.9.9.zip",
+        assetName: `dfixxer-windows-x86_64-${managedDfixxerReleaseTag}.zip`,
         executableName: "dfixxer.exe",
       };
     case "linux":
       return {
         archiveType: "tar.gz",
-        assetName: "dfixxer-linux-x86_64-v9.9.9.tar.gz",
+        assetName: `dfixxer-linux-x86_64-${managedDfixxerReleaseTag}.tar.gz`,
         executableName: "dfixxer",
       };
     default:
@@ -68,8 +68,8 @@ function getRuntimeFixture(runtimePlatform: RuntimePlatform): RuntimeFixture {
         archiveType: "tar.gz",
         assetName:
           runtimePlatform.arch === "arm64"
-            ? "dfixxer-macos-arm64-v9.9.9.tar.gz"
-            : "dfixxer-macos-x86_64-v9.9.9.tar.gz",
+            ? `dfixxer-macos-arm64-${managedDfixxerReleaseTag}.tar.gz`
+            : `dfixxer-macos-x86_64-${managedDfixxerReleaseTag}.tar.gz`,
         executableName: "dfixxer",
       };
   }
@@ -118,26 +118,24 @@ suite("Update dfixxer", () => {
         const url = resolveFetchUrl(input);
         requestedUrls.push(url);
 
-        if (url.includes("/repos/tuncb/dfixxer/releases")) {
+        if (url.includes(`/repos/tuncb/dfixxer/releases/tags/${managedDfixxerReleaseTag}`)) {
           return Promise.resolve(
             new Response(
-              JSON.stringify([
-                {
-                  assets: [
-                    {
-                      browser_download_url: "https://example.invalid/download/dfixxer",
-                      content_type: runtimeFixture.archiveType === "zip" ? "application/zip" : "application/gzip",
-                      name: runtimeFixture.assetName,
-                      size: archiveBytes.length,
-                    },
-                  ],
-                  draft: false,
-                  name: "Release v9.9.9",
-                  prerelease: true,
-                  published_at: "2026-03-16T12:00:00Z",
-                  tag_name: "v9.9.9",
-                },
-              ]),
+              JSON.stringify({
+                assets: [
+                  {
+                    browser_download_url: "https://example.invalid/download/dfixxer",
+                    content_type: runtimeFixture.archiveType === "zip" ? "application/zip" : "application/gzip",
+                    name: runtimeFixture.assetName,
+                    size: archiveBytes.length,
+                  },
+                ],
+                draft: false,
+                name: `Release ${managedDfixxerReleaseTag}`,
+                prerelease: false,
+                published_at: "2026-03-16T12:00:00Z",
+                tag_name: managedDfixxerReleaseTag,
+              }),
               { status: 200 },
             ),
           );
@@ -155,7 +153,7 @@ suite("Update dfixxer", () => {
           return Promise.resolve({
             exitCode: 0,
             stderr: "",
-            stdout: "dfixxer v9.9.9",
+            stdout: `dfixxer ${managedDfixxerReleaseTag}`,
           });
         }
 
@@ -200,6 +198,10 @@ suite("Update dfixxer", () => {
       requestedUrls.some((url) => url.includes("https://example.invalid/download/dfixxer")),
       true,
     );
+    assert.equal(
+      requestedUrls.some((url) => url.includes(`/repos/tuncb/dfixxer/releases/tags/${managedDfixxerReleaseTag}`)),
+      true,
+    );
 
     await fs.rm(tempArchivePath, { force: true });
   });
@@ -219,26 +221,24 @@ suite("Update dfixxer", () => {
       fetchImpl: (input) => {
         const url = resolveFetchUrl(input);
 
-        if (url.includes("/repos/tuncb/dfixxer/releases")) {
+        if (url.includes(`/repos/tuncb/dfixxer/releases/tags/${managedDfixxerReleaseTag}`)) {
           return Promise.resolve(
             new Response(
-              JSON.stringify([
-                {
-                  assets: [
-                    {
-                      browser_download_url: "https://example.invalid/download/dfixxer",
-                      content_type: runtimeFixture.archiveType === "zip" ? "application/zip" : "application/gzip",
-                      name: runtimeFixture.assetName,
-                      size: archiveBytes.length,
-                    },
-                  ],
-                  draft: false,
-                  name: "Release v9.9.9",
-                  prerelease: true,
-                  published_at: "2026-03-16T12:00:00Z",
-                  tag_name: "v9.9.9",
-                },
-              ]),
+              JSON.stringify({
+                assets: [
+                  {
+                    browser_download_url: "https://example.invalid/download/dfixxer",
+                    content_type: runtimeFixture.archiveType === "zip" ? "application/zip" : "application/gzip",
+                    name: runtimeFixture.assetName,
+                    size: archiveBytes.length,
+                  },
+                ],
+                draft: false,
+                name: `Release ${managedDfixxerReleaseTag}`,
+                prerelease: false,
+                published_at: "2026-03-16T12:00:00Z",
+                tag_name: managedDfixxerReleaseTag,
+              }),
               { status: 200 },
             ),
           );
@@ -255,7 +255,7 @@ suite("Update dfixxer", () => {
         Promise.resolve({
           exitCode: 0,
           stderr: "",
-          stdout: "dfixxer v9.9.9",
+          stdout: `dfixxer ${managedDfixxerReleaseTag}`,
         }),
       runtimePlatform: simulatedRuntimePlatform,
       showErrorMessage: (message) => {
@@ -279,8 +279,8 @@ suite("Update dfixxer", () => {
     assert.equal(downloadCount, 1);
     assert.deepEqual(errorMessages, []);
     assert.deepEqual(infoMessages, [
-      "Updated managed dfixxer to v9.9.9.",
-      "Managed dfixxer v9.9.9 is already up to date.",
+      `Updated managed dfixxer to ${managedDfixxerReleaseTag}.`,
+      `Managed dfixxer ${managedDfixxerReleaseTag} is already up to date.`,
     ]);
     assert.deepEqual(warningMessages, [
       "dfixxer.executablePath is set, so the configured override remains authoritative over the managed executable.",

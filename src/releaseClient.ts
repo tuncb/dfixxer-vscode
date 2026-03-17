@@ -1,6 +1,7 @@
+import { managedDfixxerReleaseTag } from "./constants";
 import { RuntimePlatform } from "./managedPaths";
 
-const githubReleasesApiUrl = "https://api.github.com/repos/tuncb/dfixxer/releases?per_page=20";
+const githubPinnedReleaseApiUrl = `https://api.github.com/repos/tuncb/dfixxer/releases/tags/${managedDfixxerReleaseTag}`;
 
 interface GitHubReleaseApiAsset {
   browser_download_url: string;
@@ -48,10 +49,10 @@ interface PlatformAssetMapping {
   archiveType: CompatibleReleaseAsset["archiveType"];
 }
 
-export async function fetchDfixxerReleases(
+export async function fetchPinnedDfixxerRelease(
   fetchImpl: typeof fetch = fetch,
-): Promise<ReleaseRecord[]> {
-  const response = await fetchImpl(githubReleasesApiUrl, {
+): Promise<ReleaseRecord> {
+  const response = await fetchImpl(githubPinnedReleaseApiUrl, {
     headers: {
       Accept: "application/vnd.github+json",
       "User-Agent": "dfixxer-vscode",
@@ -59,66 +60,57 @@ export async function fetchDfixxerReleases(
   });
 
   if (!response.ok) {
-    throw new Error(`GitHub release query failed with ${response.status} ${response.statusText}.`);
+    throw new Error(
+      `GitHub release query for ${managedDfixxerReleaseTag} failed with ${response.status} ${response.statusText}.`,
+    );
   }
 
-  const payload = (await response.json()) as GitHubReleaseApiRecord[];
+  const payload = (await response.json()) as GitHubReleaseApiRecord;
 
-  return payload.map((release) => ({
-    assets: release.assets.map((asset) => ({
+  return {
+    assets: payload.assets.map((asset) => ({
       contentType: asset.content_type,
       downloadUrl: asset.browser_download_url,
       name: asset.name,
       size: asset.size,
     })),
-    draft: release.draft,
-    name: release.name,
-    prerelease: release.prerelease,
-    publishedAt: release.published_at,
-    tagName: release.tag_name,
-  }));
+    draft: payload.draft,
+    name: payload.name,
+    prerelease: payload.prerelease,
+    publishedAt: payload.published_at,
+    tagName: payload.tag_name,
+  };
 }
 
 export function selectCompatibleReleaseAsset(
-  releases: readonly ReleaseRecord[],
+  release: ReleaseRecord,
   runtime: RuntimePlatform,
 ): CompatibleReleaseAsset {
   const mapping = getPlatformAssetMapping(runtime);
 
-  const compatibleReleases = [...releases]
-    .filter((release) => !release.draft)
-    .sort(compareReleaseRecords);
-
-  for (const release of compatibleReleases) {
-    const assetName = `${mapping.archiveBaseName}-${release.tagName}.${mapping.archiveType}`;
-    const asset = release.assets.find((candidate) => candidate.name === assetName);
-
-    if (!asset) {
-      continue;
-    }
-
-    return {
-      archiveType: mapping.archiveType,
-      assetName: asset.name,
-      downloadUrl: asset.downloadUrl,
-      releaseName: release.name,
-      releaseTag: release.tagName,
-      size: asset.size,
-    };
+  if (release.draft) {
+    throw new Error(
+      `Pinned dfixxer release ${release.tagName} is a draft and cannot be downloaded automatically.`,
+    );
   }
 
-  throw new Error(`No compatible dfixxer release asset was found for ${runtime.platform}-${runtime.arch}.`);
-}
+  const assetName = `${mapping.archiveBaseName}-${release.tagName}.${mapping.archiveType}`;
+  const asset = release.assets.find((candidate) => candidate.name === assetName);
 
-function compareReleaseRecords(left: ReleaseRecord, right: ReleaseRecord): number {
-  const leftTime = Date.parse(left.publishedAt ?? "1970-01-01T00:00:00.000Z");
-  const rightTime = Date.parse(right.publishedAt ?? "1970-01-01T00:00:00.000Z");
-
-  if (leftTime !== rightTime) {
-    return rightTime - leftTime;
+  if (!asset) {
+    throw new Error(
+      `Pinned dfixxer release ${release.tagName} does not include a compatible asset for ${runtime.platform}-${runtime.arch}.`,
+    );
   }
 
-  return right.tagName.localeCompare(left.tagName);
+  return {
+    archiveType: mapping.archiveType,
+    assetName: asset.name,
+    downloadUrl: asset.downloadUrl,
+    releaseName: release.name,
+    releaseTag: release.tagName,
+    size: asset.size,
+  };
 }
 
 function getPlatformAssetMapping(runtime: RuntimePlatform): PlatformAssetMapping {
