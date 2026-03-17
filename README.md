@@ -87,6 +87,6 @@ npm run package
 ## Releases
 
 - Pushing a tag named `v*` triggers the GitHub release workflow.
-- The tag must match `package.json` exactly, for example `package.json` version `0.0.3` requires tag `v0.0.3`.
+- The tag must match `package.json` exactly, for example `package.json` version `0.0.4` requires tag `v0.0.4`.
 - The workflow verifies Windows `x64`, Linux `x64`, macOS `x64`, and macOS `arm64`, then packages the extension and uploads the generated `.vsix` to the GitHub release for that tag.
 - No Visual Studio Marketplace publish step runs in this workflow.
