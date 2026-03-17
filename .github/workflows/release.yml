@@ -41,18 +41,13 @@ jobs:
       - name: Validate tag matches package version
         env:
           GITHUB_REF_NAME: ${{ github.ref_name }}
-        run: |
-          node - <<'NODE'
-          const pkg = require("./package.json");
+        run: >
+          node -e 'const pkg = require("./package.json");
           const tag = process.env.GITHUB_REF_NAME;
           const expectedTag = `v${pkg.version}`;
-
           if (tag !== expectedTag) {
-            throw new Error(
-              `Tag ${tag} does not match package.json version ${pkg.version}. Expected ${expectedTag}.`
-            );
-          }
-          NODE
+            throw new Error(`Tag ${tag} does not match package.json version ${pkg.version}. Expected ${expectedTag}.`);
+          }'
 
       - name: Lint
         run: npm run lint
