@@ -115,7 +115,7 @@ describe("selectCompatibleReleaseAsset", () => {
     );
   });
 
-  it("maps linux and macOS assets to the documented archive names", () => {
+  it("maps linux and both macOS architectures to the documented archive names", () => {
     const linuxRelease = selectCompatibleReleaseAsset(
       [
         {
@@ -158,10 +158,33 @@ describe("selectCompatibleReleaseAsset", () => {
       { platform: "darwin", arch: "x64" },
     );
 
+    const macArmRelease = selectCompatibleReleaseAsset(
+      [
+        {
+          assets: [
+            {
+              contentType: "application/gzip",
+              downloadUrl: "https://example.invalid/macos-arm64-v0.11.1.tar.gz",
+              name: "dfixxer-macos-arm64-v0.11.1.tar.gz",
+              size: 203,
+            },
+          ],
+          draft: false,
+          name: "Release v0.11.1",
+          prerelease: false,
+          publishedAt: "2026-03-17T12:00:00Z",
+          tagName: "v0.11.1",
+        },
+      ],
+      { platform: "darwin", arch: "arm64" },
+    );
+
     assert.equal(linuxRelease.archiveType, "tar.gz");
     assert.equal(linuxRelease.assetName, "dfixxer-linux-x86_64-v0.11.0.tar.gz");
     assert.equal(macRelease.archiveType, "tar.gz");
     assert.equal(macRelease.assetName, "dfixxer-macos-x86_64-v0.11.0.tar.gz");
+    assert.equal(macArmRelease.archiveType, "tar.gz");
+    assert.equal(macArmRelease.assetName, "dfixxer-macos-arm64-v0.11.1.tar.gz");
   });
 
   it("returns an actionable error for unsupported platforms", () => {

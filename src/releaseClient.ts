@@ -122,22 +122,37 @@ function compareReleaseRecords(left: ReleaseRecord, right: ReleaseRecord): numbe
 }
 
 function getPlatformAssetMapping(runtime: RuntimePlatform): PlatformAssetMapping {
-  if (runtime.arch !== "x64") {
-    throwUnsupportedPlatform(runtime);
-  }
-
   switch (runtime.platform) {
     case "win32":
+      if (runtime.arch !== "x64") {
+        throwUnsupportedPlatform(runtime);
+      }
+
       return {
         archiveBaseName: "dfixxer-windows-x86_64",
         archiveType: "zip",
       };
     case "linux":
+      if (runtime.arch !== "x64") {
+        throwUnsupportedPlatform(runtime);
+      }
+
       return {
         archiveBaseName: "dfixxer-linux-x86_64",
         archiveType: "tar.gz",
       };
     case "darwin":
+      if (runtime.arch === "arm64") {
+        return {
+          archiveBaseName: "dfixxer-macos-arm64",
+          archiveType: "tar.gz",
+        };
+      }
+
+      if (runtime.arch !== "x64") {
+        throwUnsupportedPlatform(runtime);
+      }
+
       return {
         archiveBaseName: "dfixxer-macos-x86_64",
         archiveType: "tar.gz",

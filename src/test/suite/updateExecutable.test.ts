@@ -66,7 +66,10 @@ function getRuntimeFixture(runtimePlatform: RuntimePlatform): RuntimeFixture {
     default:
       return {
         archiveType: "tar.gz",
-        assetName: "dfixxer-macos-x86_64-v9.9.9.tar.gz",
+        assetName:
+          runtimePlatform.arch === "arm64"
+            ? "dfixxer-macos-arm64-v9.9.9.tar.gz"
+            : "dfixxer-macos-x86_64-v9.9.9.tar.gz",
         executableName: "dfixxer",
       };
   }
@@ -77,7 +80,7 @@ suite("Update dfixxer", () => {
   const fakeOverridePath = workspaceRoot ? path.join(workspaceRoot, "override-dfixxer.exe") : "";
   const pascalFilePath = workspaceRoot ? path.join(workspaceRoot, "first-use-bootstrap-test.pas") : "";
   const simulatedRuntimePlatform: RuntimePlatform = {
-    arch: "x64",
+    arch: process.arch,
     platform: process.platform,
   };
   const runtimeFixture = getRuntimeFixture(simulatedRuntimePlatform);
