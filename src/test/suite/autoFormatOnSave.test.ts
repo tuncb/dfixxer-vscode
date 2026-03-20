@@ -139,6 +139,35 @@ suite("Auto Format On Save", () => {
     assert.deepEqual(invocations, [pascalFilePath, objectPascalFilePath]);
   });
 
+  test("retries transient file-lock failures during save-triggered formatting", async () => {
+    const api = await getExtensionApi();
+    let invocationCount = 0;
+
+    api.setTestHooks({
+      processRunner: (_executablePath, args) => {
+        invocationCount += 1;
+        if (invocationCount === 1) {
+          const error = new Error(`EBUSY: resource busy or locked, open '${args[1] ?? ""}'`) as NodeJS.ErrnoException;
+          error.code = "EBUSY";
+          return Promise.reject(error);
+        }
+
+        return fs.writeFile(args[1] ?? "", "formatted after retry", "utf8").then(() => ({
+          exitCode: 0,
+          stderr: "",
+          stdout: "",
+        }));
+      },
+    });
+
+    await fs.writeFile(pascalFilePath, "program Retry;", "utf8");
+    const editor = await openDocument(pascalFilePath);
+    await api.invokeDidSaveForTest(editor.document);
+    await waitForText(editor.document, "formatted after retry");
+
+    assert.equal(invocationCount, 2);
+  });
+
   test("skips non-file documents in the save handler", async () => {
     const api = await getExtensionApi();
     let invoked = false;

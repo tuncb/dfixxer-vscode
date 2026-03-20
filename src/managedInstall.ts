@@ -156,6 +156,15 @@ export async function validateManagedExecutable(
   return result;
 }
 
+export async function managedExecutableReportsRelease(
+  executablePath: string,
+  expectedReleaseTag: string,
+  processRunner: ProcessRunner = execFileProcessRunner,
+): Promise<boolean> {
+  const result = await validateManagedExecutable(executablePath, processRunner);
+  return versionOutputMatchesRelease(result, expectedReleaseTag);
+}
+
 async function downloadReleaseAsset(
   downloadUrl: string,
   archivePath: string,
@@ -257,4 +266,24 @@ function isMissingPathError(error: unknown): error is NodeJS.ErrnoException {
 
 function randomSuffix(): string {
   return `${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+}
+
+function versionOutputMatchesRelease(result: ProcessResult, expectedReleaseTag: string): boolean {
+  const combinedOutput = `${result.stdout}\n${result.stderr}`;
+  const normalizedExpectedRelease = normalizeReleaseTag(expectedReleaseTag);
+  const versionMatches = combinedOutput.match(/v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)*/gu) ?? [];
+
+  if (versionMatches.length > 0) {
+    return versionMatches.some((version) => normalizeReleaseTag(version) === normalizedExpectedRelease);
+  }
+
+  const normalizedOutput = combinedOutput.toLowerCase();
+  return (
+    normalizedOutput.includes(expectedReleaseTag.toLowerCase()) ||
+    normalizedOutput.includes(normalizedExpectedRelease.toLowerCase())
+  );
+}
+
+function normalizeReleaseTag(value: string): string {
+  return value.trim().replace(/^[vV]/u, "");
 }

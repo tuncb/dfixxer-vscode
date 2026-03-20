@@ -6,6 +6,7 @@ import { createLogger, OutputChannelLike } from "../../logger";
 import {
   downloadAndInstallManagedExecutable,
   installManagedExecutableFromArchive,
+  managedExecutableReportsRelease,
   readManagedInstallMetadata,
 } from "../../managedInstall";
 import { getManagedExecutableLayout } from "../../managedPaths";
@@ -205,5 +206,22 @@ describe("downloadAndInstallManagedExecutable", () => {
     } finally {
       await fs.rm(tempRoot, { force: true, recursive: true });
     }
+  });
+});
+
+describe("managedExecutableReportsRelease", () => {
+  it("accepts version output that omits the leading v prefix", async () => {
+    const matches = await managedExecutableReportsRelease(
+      "ignored",
+      "v0.11.0",
+      () =>
+        Promise.resolve({
+          exitCode: 0,
+          stderr: "",
+          stdout: "dfixxer 0.11.0",
+        }),
+    );
+
+    assert.equal(matches, true);
   });
 });

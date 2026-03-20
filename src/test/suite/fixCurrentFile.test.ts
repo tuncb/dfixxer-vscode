@@ -32,9 +32,26 @@ async function waitForText(document: vscode.TextDocument, expectedText: string):
   assert.equal(document.getText(), expectedText);
 }
 
+async function waitForCondition(
+  condition: () => boolean,
+  timeoutMs = 1000,
+): Promise<void> {
+  const startedAt = Date.now();
+  while (!condition()) {
+    if (Date.now() - startedAt > timeoutMs) {
+      break;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+
+  assert.equal(condition(), true);
+}
+
 suite("Fix Current File", () => {
   const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pascalFilePath = workspaceRoot ? path.join(workspaceRoot, "fix-current-file-test.pas") : "";
+  const secondaryPascalFilePath = workspaceRoot ? path.join(workspaceRoot, "fix-current-file-secondary-test.pas") : "";
   const textFilePath = workspaceRoot ? path.join(workspaceRoot, "fix-current-file-test.txt") : "";
   const fakeExecutablePath = workspaceRoot ? path.join(workspaceRoot, "fake-dfixxer.exe") : "";
 
@@ -54,6 +71,7 @@ suite("Fix Current File", () => {
 
   teardown(async () => {
     await fs.rm(pascalFilePath, { force: true });
+    await fs.rm(secondaryPascalFilePath, { force: true });
     await fs.rm(textFilePath, { force: true });
   });
 
@@ -133,5 +151,87 @@ suite("Fix Current File", () => {
     const logText = api.getLogLines().join("\n");
     assert.match(logText, /stdout: stdout output/u);
     assert.match(logText, /stderr: stderr output/u);
+  });
+
+  test("keeps fresh in-editor edits when the formatted document changes again before completion", async () => {
+    const api = await getExtensionApi();
+    let releaseFormatter: (() => void) | undefined;
+
+    api.setTestHooks({
+      processRunner: (_executablePath, args) =>
+        new Promise((resolve, reject) => {
+          releaseFormatter = () => {
+            fs.writeFile(args[1] ?? "", "formatted text", "utf8")
+              .then(() => resolve({ exitCode: 0, stderr: "", stdout: "" }))
+              .catch(reject);
+          };
+        }),
+    });
+
+    await fs.writeFile(pascalFilePath, "original text", "utf8");
+    const editor = await openDocument(pascalFilePath);
+
+    const fixPromise = vscode.commands.executeCommand(commandIds.fixCurrentFile);
+    await waitForCondition(() => releaseFormatter !== undefined);
+
+    await editor.edit((editBuilder) => {
+      editBuilder.replace(
+        new vscode.Range(editor.document.positionAt(0), editor.document.positionAt(editor.document.getText().length)),
+        "second draft",
+      );
+    });
+
+    assert.ok(releaseFormatter);
+    releaseFormatter();
+    await fixPromise;
+
+    assert.equal(editor.document.getText(), "second draft");
+    assert.equal(editor.document.isDirty, true);
+    assert.equal(await fs.readFile(pascalFilePath, "utf8"), "formatted text");
+  });
+
+  test("reloads only the formatted document when the active editor changed mid-run", async () => {
+    const api = await getExtensionApi();
+    let releaseFormatter: (() => void) | undefined;
+
+    api.setTestHooks({
+      processRunner: (_executablePath, args) =>
+        new Promise((resolve, reject) => {
+          releaseFormatter = () => {
+            fs.writeFile(args[1] ?? "", "formatted text", "utf8")
+              .then(() => resolve({ exitCode: 0, stderr: "", stdout: "" }))
+              .catch(reject);
+          };
+        }),
+    });
+
+    await fs.writeFile(pascalFilePath, "program Primary;", "utf8");
+    await fs.writeFile(secondaryPascalFilePath, "program Secondary;", "utf8");
+    const formattedEditor = await openDocument(pascalFilePath);
+    const secondaryDocument = await vscode.workspace.openTextDocument(secondaryPascalFilePath);
+    await vscode.window.showTextDocument(secondaryDocument);
+    await vscode.window.showTextDocument(formattedEditor.document);
+
+    const fixPromise = vscode.commands.executeCommand(commandIds.fixCurrentFile);
+    await waitForCondition(() => releaseFormatter !== undefined);
+
+    const secondaryEditor = await vscode.window.showTextDocument(secondaryDocument);
+    await secondaryEditor.edit((editBuilder) => {
+      editBuilder.replace(
+        new vscode.Range(
+          secondaryEditor.document.positionAt(0),
+          secondaryEditor.document.positionAt(secondaryEditor.document.getText().length),
+        ),
+        "program SecondaryDirty;",
+      );
+    });
+
+    assert.ok(releaseFormatter);
+    releaseFormatter();
+    await fixPromise;
+
+    await waitForText(formattedEditor.document, "formatted text");
+    assert.equal(secondaryEditor.document.getText(), "program SecondaryDirty;");
+    assert.equal(secondaryEditor.document.isDirty, true);
   });
 });
