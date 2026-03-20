@@ -8,7 +8,7 @@ import { resolveExecutablePath } from "./executableResolution";
 import { downloadAndInstallManagedExecutable, readManagedInstallMetadata } from "./managedInstall";
 import { detectRuntimePlatform, getManagedExecutableLayout, RuntimePlatform } from "./managedPaths";
 import { createLogger, OutputChannelLike } from "./logger";
-import { ProcessRunner, execFileProcessRunner } from "./processRunner";
+import { ProcessResult, ProcessRunner, execFileProcessRunner } from "./processRunner";
 import { fetchPinnedDfixxerRelease, selectCompatibleReleaseAsset } from "./releaseClient";
 import { getDocumentSettings, getScopedSettings, getWorkspaceFolderPath, resolveConfigurationPath } from "./vscodeSettings";
 
@@ -334,7 +334,7 @@ export class ExtensionController implements vscode.Disposable, ExtensionApi {
         return;
       }
 
-      await this.delay(50);
+      await this.delay(this.getPostSaveDelayMilliseconds());
     }
 
     const workspaceFolderPath = getWorkspaceFolderPath(document.uri);
@@ -348,9 +348,17 @@ export class ExtensionController implements vscode.Disposable, ExtensionApi {
     this.logger.info(`Running ${executablePath} ${args.join(" ")}.`);
 
     const processRunner = this.testHooks.processRunner ?? execFileProcessRunner;
-    const processResult = await processRunner(executablePath, args, {
-      cwd: workspaceFolderPath,
-    });
+    let processResult: ProcessResult;
+    try {
+      processResult = await this.runFormatterProcess(processRunner, executablePath, args, workspaceFolderPath);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.logger.error(`dfixxer update failed for ${document.uri.fsPath}: ${errorMessage}`);
+      await this.showErrorMessage(
+        `dfixxer failed to format ${path.basename(document.uri.fsPath)}. See the dfixxer output channel for details.`,
+      );
+      return;
+    }
 
     if (processResult.exitCode !== 0) {
       this.logger.error(
@@ -396,7 +404,7 @@ export class ExtensionController implements vscode.Disposable, ExtensionApi {
       return;
     }
 
-    await this.delay(50);
+    await this.delay(this.getPostSaveDelayMilliseconds());
     const result = await this.documentGuard.run(documentKey, async () => this.runFixFromSave(document));
     if (!result.executed) {
       this.logger.info(`Skipped a re-entrant save-triggered fix for ${document.uri.fsPath}.`);
@@ -497,6 +505,64 @@ export class ExtensionController implements vscode.Disposable, ExtensionApi {
       this.logger.warn(`Could not show ${document.uri.fsPath} for reload after formatting: ${errorMessage}`);
       return undefined;
     }
+  }
+
+  private async runFormatterProcess(
+    processRunner: ProcessRunner,
+    executablePath: string,
+    args: readonly string[],
+    cwd?: string,
+  ): Promise<ProcessResult> {
+    const maximumAttempts = 3;
+    for (let attempt = 1; attempt <= maximumAttempts; attempt += 1) {
+      try {
+        const result = await processRunner(executablePath, args, { cwd });
+        if (result.exitCode === 0 || attempt === maximumAttempts || !this.isTransientFileAccessFailure(result)) {
+          return result;
+        }
+
+        this.logger.warn(
+          `Retrying dfixxer for ${args[1] ?? ""} after a transient file access failure (${attempt}/${maximumAttempts}).`,
+        );
+      } catch (error: unknown) {
+        if (attempt === maximumAttempts || !this.isTransientFileAccessError(error)) {
+          throw error;
+        }
+
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        this.logger.warn(
+          `Retrying dfixxer for ${args[1] ?? ""} after a transient file access failure (${attempt}/${maximumAttempts}): ${errorMessage}`,
+        );
+      }
+
+      await this.delay(75 * attempt);
+    }
+
+    throw new Error("Transient formatter retry loop exited unexpectedly.");
+  }
+
+  private isTransientFileAccessFailure(processResult: ProcessResult): boolean {
+    return this.matchesTransientFileAccessPattern(`${processResult.stdout}\n${processResult.stderr}`);
+  }
+
+  private isTransientFileAccessError(error: unknown): boolean {
+    if (typeof error === "object" && error !== null && "code" in error) {
+      const errorCode = (error as { code?: unknown }).code;
+      if (typeof errorCode === "string" && ["EACCES", "EBUSY", "EPERM"].includes(errorCode)) {
+        return true;
+      }
+    }
+
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return this.matchesTransientFileAccessPattern(errorMessage);
+  }
+
+  private matchesTransientFileAccessPattern(value: string): boolean {
+    return /\b(?:EACCES|EBUSY|EPERM)\b|resource busy or locked|being used by another process/iu.test(value);
+  }
+
+  private getPostSaveDelayMilliseconds(): number {
+    return this.getRuntimePlatform().platform === "win32" ? 125 : 50;
   }
 
   private async delay(milliseconds: number): Promise<void> {
