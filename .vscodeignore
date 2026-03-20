@@ -7,8 +7,10 @@ eslint.config.mjs
 implement.md
 plans.md
 documentation.md
+code-review.md
 .github/**
 .mocharc.unit.json
 test-fixtures/**
 **/*.map
 **/*.ts
+plans/**
