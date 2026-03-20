@@ -348,6 +348,7 @@ export class ExtensionController implements vscode.Disposable, ExtensionApi {
     this.logger.info(`Running ${executablePath} ${args.join(" ")}.`);
 
     const processRunner = this.testHooks.processRunner ?? execFileProcessRunner;
+    const initialDocumentVersion = document.version;
     const processResult = await processRunner(executablePath, args, {
       cwd: workspaceFolderPath,
     });
@@ -376,8 +377,14 @@ export class ExtensionController implements vscode.Disposable, ExtensionApi {
       this.logger.warn(`stderr: ${processResult.stderr}`);
     }
 
-    await vscode.commands.executeCommand("workbench.action.files.revert");
-    this.logger.info(`Reloaded ${document.uri.fsPath} after a successful dfixxer update.`);
+    if (document.version !== initialDocumentVersion || document.isDirty) {
+      this.logger.warn(
+        `Skipped reloading ${document.uri.fsPath} because the document changed while dfixxer was running.`,
+      );
+      return;
+    }
+
+    await this.reloadDocument(document);
   }
 
   private async handleDidSaveTextDocument(document: vscode.TextDocument): Promise<void> {
@@ -496,6 +503,34 @@ export class ExtensionController implements vscode.Disposable, ExtensionApi {
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.logger.warn(`Could not show ${document.uri.fsPath} for reload after formatting: ${errorMessage}`);
       return undefined;
+    }
+  }
+
+  private async reloadDocument(document: vscode.TextDocument): Promise<void> {
+    const previouslyActiveEditor = vscode.window.activeTextEditor;
+    const shouldRestorePreviousEditor =
+      previouslyActiveEditor && previouslyActiveEditor.document.uri.toString() !== document.uri.toString();
+
+    try {
+      await vscode.window.showTextDocument(document, { preserveFocus: false, preview: false });
+      await vscode.commands.executeCommand("workbench.action.files.revert");
+      this.logger.info(`Reloaded ${document.uri.fsPath} after a successful dfixxer update.`);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`Could not reload ${document.uri.fsPath} after formatting: ${errorMessage}`);
+    } finally {
+      if (shouldRestorePreviousEditor) {
+        try {
+          await vscode.window.showTextDocument(previouslyActiveEditor.document, {
+            preserveFocus: false,
+            preview: false,
+            viewColumn: previouslyActiveEditor.viewColumn,
+          });
+        } catch (error: unknown) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          this.logger.warn(`Could not restore ${previouslyActiveEditor.document.uri.fsPath}: ${errorMessage}`);
+        }
+      }
     }
   }
 
