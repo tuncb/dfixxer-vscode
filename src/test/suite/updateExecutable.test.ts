@@ -289,4 +289,80 @@ suite("Update dfixxer", () => {
 
     await fs.rm(tempArchivePath, { force: true });
   });
+
+  test("reinstalls when metadata matches but the managed binary reports a different version", async () => {
+    const api = await getExtensionApi();
+    const errorMessages: string[] = [];
+    const infoMessages: string[] = [];
+    const tempArchivePath = path.join(workspaceRoot ?? "", runtimeFixture.assetName);
+    const archiveBytes = await buildArchiveBytes(tempArchivePath, runtimeFixture);
+    let downloadCount = 0;
+    let versionInvocationCount = 0;
+
+    api.setTestHooks({
+      fetchImpl: (input) => {
+        const url = resolveFetchUrl(input);
+
+        if (url.includes(`/repos/tuncb/dfixxer/releases/tags/${managedDfixxerReleaseTag}`)) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                assets: [
+                  {
+                    browser_download_url: "https://example.invalid/download/dfixxer",
+                    content_type: runtimeFixture.archiveType === "zip" ? "application/zip" : "application/gzip",
+                    name: runtimeFixture.assetName,
+                    size: archiveBytes.length,
+                  },
+                ],
+                draft: false,
+                name: `Release ${managedDfixxerReleaseTag}`,
+                prerelease: false,
+                published_at: "2026-03-16T12:00:00Z",
+                tag_name: managedDfixxerReleaseTag,
+              }),
+              { status: 200 },
+            ),
+          );
+        }
+
+        downloadCount += 1;
+        return Promise.resolve(
+          new Response(new Uint8Array(archiveBytes), {
+            status: 200,
+          }),
+        );
+      },
+      processRunner: () => {
+        versionInvocationCount += 1;
+        return Promise.resolve({
+          exitCode: 0,
+          stderr: "",
+          stdout: versionInvocationCount === 2 ? "dfixxer v0.10.0" : `dfixxer ${managedDfixxerReleaseTag}`,
+        });
+      },
+      runtimePlatform: simulatedRuntimePlatform,
+      showErrorMessage: (message) => {
+        errorMessages.push(message);
+        return Promise.resolve(undefined);
+      },
+      showInformationMessage: (message) => {
+        infoMessages.push(message);
+        return Promise.resolve(undefined);
+      },
+    });
+
+    await vscode.commands.executeCommand(commandIds.updateExecutable);
+    await vscode.commands.executeCommand(commandIds.updateExecutable);
+
+    assert.equal(downloadCount, 2);
+    assert.equal(versionInvocationCount, 3);
+    assert.deepEqual(errorMessages, []);
+    assert.deepEqual(infoMessages, [
+      `Updated managed dfixxer to ${managedDfixxerReleaseTag}.`,
+      `Updated managed dfixxer to ${managedDfixxerReleaseTag}.`,
+    ]);
+
+    await fs.rm(tempArchivePath, { force: true });
+  });
 });

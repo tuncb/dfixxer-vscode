@@ -5,7 +5,11 @@ import { commandIds, extensionName } from "./constants";
 import { DocumentRunGuard } from "./documentRunGuard";
 import { isFileBackedDocument, isPascalDocument } from "./documentUtils";
 import { resolveExecutablePath } from "./executableResolution";
-import { downloadAndInstallManagedExecutable, readManagedInstallMetadata } from "./managedInstall";
+import {
+  downloadAndInstallManagedExecutable,
+  managedExecutableReportsRelease,
+  readManagedInstallMetadata,
+} from "./managedInstall";
 import { detectRuntimePlatform, getManagedExecutableLayout, RuntimePlatform } from "./managedPaths";
 import { createLogger, OutputChannelLike } from "./logger";
 import { ProcessRunner, execFileProcessRunner } from "./processRunner";
@@ -278,12 +282,22 @@ export class ExtensionController implements vscode.Disposable, ExtensionApi {
         currentMetadata.releaseTag === asset.releaseTag &&
         existsSync(managedLayout.executablePath)
       ) {
-        this.logger.info(`Managed dfixxer ${currentMetadata.releaseTag} is already current.`);
-        return {
-          executablePath: managedLayout.executablePath,
-          kind: "noop",
-          metadata: currentMetadata,
-        };
+        const isCurrentManagedInstall = await this.isCurrentManagedInstall(
+          managedLayout.executablePath,
+          asset.releaseTag,
+        );
+        if (isCurrentManagedInstall) {
+          this.logger.info(`Managed dfixxer ${currentMetadata.releaseTag} is already current.`);
+          return {
+            executablePath: managedLayout.executablePath,
+            kind: "noop",
+            metadata: currentMetadata,
+          };
+        }
+
+        this.logger.warn(
+          `Managed dfixxer metadata reports ${currentMetadata.releaseTag}, but ${managedLayout.executablePath} did not verify as ${asset.releaseTag}; reinstalling.`,
+        );
       }
 
       const installResult = await downloadAndInstallManagedExecutable({
@@ -315,6 +329,20 @@ export class ExtensionController implements vscode.Disposable, ExtensionApi {
 
   private getRuntimePlatform(): RuntimePlatform {
     return this.testHooks.runtimePlatform ?? detectRuntimePlatform();
+  }
+
+  private async isCurrentManagedInstall(executablePath: string, expectedReleaseTag: string): Promise<boolean> {
+    try {
+      return await managedExecutableReportsRelease(
+        executablePath,
+        expectedReleaseTag,
+        this.testHooks.processRunner ?? execFileProcessRunner,
+      );
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`Managed executable validation failed for ${executablePath}: ${errorMessage}`);
+      return false;
+    }
   }
 
   private async runFix(editor: vscode.TextEditor): Promise<void> {
