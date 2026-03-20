@@ -97,6 +97,7 @@
   },
   "scripts": {
     "compile": "tsc -p ./",
+    "vscode:prepublish": "npm run compile",
     "watch": "tsc -w -p ./",
     "lint": "eslint \"src/**/*.ts\"",
     "test:unit": "mocha --config .mocharc.unit.json",
