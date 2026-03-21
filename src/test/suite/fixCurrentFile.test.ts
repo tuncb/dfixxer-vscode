@@ -56,10 +56,11 @@ async function waitForDirtyText(document: vscode.TextDocument, expectedText: str
 
 suite("Fix Current File", () => {
   const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  const pascalFilePath = workspaceRoot ? path.join(workspaceRoot, "fix-current-file-test.pas") : "";
-  const alternatePascalFilePath = workspaceRoot ? path.join(workspaceRoot, "fix-current-file-alternate-test.pas") : "";
-  const textFilePath = workspaceRoot ? path.join(workspaceRoot, "fix-current-file-test.txt") : "";
   const fakeExecutablePath = workspaceRoot ? path.join(workspaceRoot, "fake-dfixxer.exe") : "";
+  let pascalFilePath = "";
+  let alternatePascalFilePath = "";
+  let textFilePath = "";
+  let testFileCounter = 0;
 
   suiteSetup(async () => {
     assert.ok(workspaceRoot);
@@ -69,6 +70,11 @@ suite("Fix Current File", () => {
   setup(async function () {
     const api = await getExtensionApi();
     api.resetTestHooks();
+    assert.ok(workspaceRoot);
+    testFileCounter += 1;
+    pascalFilePath = path.join(workspaceRoot, `fix-current-file-test-${testFileCounter}.pas`);
+    alternatePascalFilePath = path.join(workspaceRoot, `fix-current-file-alternate-test-${testFileCounter}.pas`);
+    textFilePath = path.join(workspaceRoot, `fix-current-file-test-${testFileCounter}.txt`);
     await updateSetting("configurationFile", "");
     await updateSetting("executablePath", fakeExecutablePath);
     await updateSetting("formatOnSave", false);
@@ -152,7 +158,7 @@ suite("Fix Current File", () => {
     await vscode.commands.executeCommand(commandIds.fixCurrentFile);
 
     assert.deepEqual(errors, [
-      "dfixxer failed to format fix-current-file-test.pas. See the dfixxer output channel for details.",
+      `dfixxer failed to format ${path.basename(pascalFilePath)}. See the dfixxer output channel for details.`,
     ]);
     const logText = api.getLogLines().join("\n");
     assert.match(logText, /stdout: stdout output/u);
@@ -258,7 +264,7 @@ suite("Fix Current File", () => {
     assert.equal(editor.document.getText(), "newer unsaved text");
     assert.equal(editor.document.isDirty, true);
     assert.deepEqual(infos, [
-      "dfixxer formatted fix-current-file-test.pas on disk, but the file changed while formatting was running. Your newer edits were kept. Save or run Fix Current File again to apply formatting to the latest content.",
+      `dfixxer formatted ${path.basename(pascalFilePath)} on disk, but the file changed while formatting was running. Your newer edits were kept. Save or run Fix Current File again to apply formatting to the latest content.`,
     ]);
   });
 });
