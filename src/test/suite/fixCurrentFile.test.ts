@@ -41,6 +41,19 @@ async function waitForText(document: vscode.TextDocument, expectedText: string):
   assert.equal(document.getText(), expectedText);
 }
 
+async function waitForDirtyText(document: vscode.TextDocument, expectedText: string): Promise<void> {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    if (document.isDirty && document.getText() === expectedText) {
+      return;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+
+  assert.equal(document.isDirty, true);
+  assert.equal(document.getText(), expectedText);
+}
+
 suite("Fix Current File", () => {
   const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pascalFilePath = workspaceRoot ? path.join(workspaceRoot, "fix-current-file-test.pas") : "";
@@ -230,12 +243,14 @@ suite("Fix Current File", () => {
     }
     assert.ok(releaseFormatter);
 
-    await editor.edit((editBuilder) => {
+    const applied = await editor.edit((editBuilder) => {
       editBuilder.replace(
         new vscode.Range(editor.document.positionAt(0), editor.document.positionAt(editor.document.getText().length)),
         "newer unsaved text",
       );
     });
+    assert.equal(applied, true);
+    await waitForDirtyText(editor.document, "newer unsaved text");
 
     releaseFormatter();
     await fixPromise;

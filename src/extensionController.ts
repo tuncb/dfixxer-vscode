@@ -356,7 +356,7 @@ export class ExtensionController implements vscode.Disposable, ExtensionApi {
       this.logger.warn(`stderr: ${processResult.stderr}`);
     }
 
-    await this.reloadFormattedDocumentIfSafe(document.uri, baselineVersion);
+    await this.reloadFormattedDocumentIfSafe(document, baselineVersion);
   }
 
   private async handleDidSaveTextDocument(document: vscode.TextDocument): Promise<void> {
@@ -478,8 +478,7 @@ export class ExtensionController implements vscode.Disposable, ExtensionApi {
     }
   }
 
-  private async reloadFormattedDocumentIfSafe(documentUri: vscode.Uri, baselineVersion: number): Promise<void> {
-    const document = await vscode.workspace.openTextDocument(documentUri);
+  private async reloadFormattedDocumentIfSafe(document: vscode.TextDocument, baselineVersion: number): Promise<void> {
     if (document.isDirty || document.version !== baselineVersion) {
       this.logger.warn(
         `Skipped reloading ${document.uri.fsPath} after formatting because the editor changed during the dfixxer run.`,
@@ -502,7 +501,7 @@ export class ExtensionController implements vscode.Disposable, ExtensionApi {
         preserveFocus: false,
         viewColumn: targetEditor.viewColumn,
       });
-      await vscode.commands.executeCommand("workbench.action.files.revert", documentUri);
+      await vscode.commands.executeCommand("workbench.action.files.revert", document.uri);
       this.logger.info(`Reloaded ${document.uri.fsPath} after a successful dfixxer update.`);
     } finally {
       if (
