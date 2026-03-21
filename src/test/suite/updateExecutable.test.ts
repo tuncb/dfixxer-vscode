@@ -206,7 +206,7 @@ suite("Update dfixxer", () => {
     await fs.rm(tempArchivePath, { force: true });
   });
 
-  test("updates the managed binary, warns when an override is set, and returns no-op when already current", async () => {
+  test("updates the managed binary every time and warns when an override is set", async () => {
     const api = await getExtensionApi();
     const errorMessages: string[] = [];
     const tempArchivePath = path.join(workspaceRoot ?? "", runtimeFixture.assetName);
@@ -276,15 +276,101 @@ suite("Update dfixxer", () => {
     await vscode.commands.executeCommand(commandIds.updateExecutable);
 
     assert.equal(await fs.readFile(fakeOverridePath, "utf8"), "override binary");
-    assert.equal(downloadCount, 1);
+    assert.equal(downloadCount, 2);
     assert.deepEqual(errorMessages, []);
     assert.deepEqual(infoMessages, [
       `Updated managed dfixxer to ${managedDfixxerReleaseTag}.`,
-      `Managed dfixxer ${managedDfixxerReleaseTag} is already up to date.`,
+      `Updated managed dfixxer to ${managedDfixxerReleaseTag}.`,
     ]);
     assert.deepEqual(warningMessages, [
       "dfixxer.executablePath is set, so the configured override remains authoritative over the managed executable.",
       "dfixxer.executablePath is set, so the configured override remains authoritative over the managed executable.",
+    ]);
+
+    await fs.rm(tempArchivePath, { force: true });
+  });
+
+  test("allows retrying the update command after a failed download", async () => {
+    const api = await getExtensionApi();
+    const errorMessages: string[] = [];
+    const tempArchivePath = path.join(workspaceRoot ?? "", runtimeFixture.assetName);
+    const archiveBytes = await buildArchiveBytes(tempArchivePath, runtimeFixture);
+    const infoMessages: string[] = [];
+    let downloadAttempts = 0;
+    let validationCount = 0;
+
+    api.setTestHooks({
+      fetchImpl: (input) => {
+        const url = resolveFetchUrl(input);
+
+        if (url.includes(`/repos/tuncb/dfixxer/releases/tags/${managedDfixxerReleaseTag}`)) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                assets: [
+                  {
+                    browser_download_url: "https://example.invalid/download/dfixxer",
+                    content_type: runtimeFixture.archiveType === "zip" ? "application/zip" : "application/gzip",
+                    name: runtimeFixture.assetName,
+                    size: archiveBytes.length,
+                  },
+                ],
+                draft: false,
+                name: `Release ${managedDfixxerReleaseTag}`,
+                prerelease: false,
+                published_at: "2026-03-16T12:00:00Z",
+                tag_name: managedDfixxerReleaseTag,
+              }),
+              { status: 200 },
+            ),
+          );
+        }
+
+        downloadAttempts += 1;
+        if (downloadAttempts === 1) {
+          return Promise.resolve(
+            new Response(undefined, {
+              status: 500,
+              statusText: "Retryable failure",
+            }),
+          );
+        }
+
+        return Promise.resolve(
+          new Response(new Uint8Array(archiveBytes), {
+            status: 200,
+          }),
+        );
+      },
+      processRunner: () => {
+        validationCount += 1;
+        return Promise.resolve({
+          exitCode: 0,
+          stderr: "",
+          stdout: `dfixxer ${managedDfixxerReleaseTag}`,
+        });
+      },
+      runtimePlatform: simulatedRuntimePlatform,
+      showErrorMessage: (message) => {
+        errorMessages.push(message);
+        return Promise.resolve(undefined);
+      },
+      showInformationMessage: (message) => {
+        infoMessages.push(message);
+        return Promise.resolve(undefined);
+      },
+    });
+
+    await vscode.commands.executeCommand(commandIds.updateExecutable);
+    await vscode.commands.executeCommand(commandIds.updateExecutable);
+
+    assert.equal(downloadAttempts, 2);
+    assert.equal(validationCount, 1);
+    assert.deepEqual(errorMessages, [
+      "dfixxer could not be installed automatically. Download failed with 500 Retryable failure.",
+    ]);
+    assert.deepEqual(infoMessages, [
+      `Updated managed dfixxer to ${managedDfixxerReleaseTag}.`,
     ]);
 
     await fs.rm(tempArchivePath, { force: true });

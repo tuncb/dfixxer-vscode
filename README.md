@@ -44,8 +44,8 @@ If your platform is unsupported, point `dfixxer.executablePath` at a compatible 
 
 ### `dfixxer: Update dfixxer`
 
-- Downloads or updates the managed executable to the pinned `v0.11.1` release
-- Returns a no-op when the installed managed tag already matches `v0.11.1`
+- Downloads the pinned `v0.11.1` release to a temporary location, validates it, and only then replaces the managed executable
+- Leaves the existing managed install untouched when the download, extraction, validation, or replacement step fails
 - Still updates the managed copy when `dfixxer.executablePath` is set, but warns that the override remains authoritative
 
 ## Settings

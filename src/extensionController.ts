@@ -5,7 +5,7 @@ import { commandIds, extensionName } from "./constants";
 import { DocumentRunGuard } from "./documentRunGuard";
 import { isFileBackedDocument, isPascalDocument } from "./documentUtils";
 import { resolveExecutablePath } from "./executableResolution";
-import { downloadAndInstallManagedExecutable, readManagedInstallMetadata } from "./managedInstall";
+import { downloadAndInstallManagedExecutable } from "./managedInstall";
 import { detectRuntimePlatform, getManagedExecutableLayout, RuntimePlatform } from "./managedPaths";
 import { createLogger, OutputChannelLike } from "./logger";
 import { ProcessRunner, execFileProcessRunner } from "./processRunner";
@@ -172,15 +172,9 @@ export class ExtensionController implements vscode.Disposable, ExtensionApi {
       return;
     }
 
-    if (updateResult.kind === "noop") {
-      await this.showInformationMessage(
-        `Managed dfixxer ${updateResult.metadata.releaseTag} is already up to date.`,
-      );
-    } else {
-      await this.showInformationMessage(
-        `Updated managed dfixxer to ${updateResult.metadata.releaseTag}.`,
-      );
-    }
+    await this.showInformationMessage(
+      `Updated managed dfixxer to ${updateResult.metadata.releaseTag}.`,
+    );
 
     const scopedSettings = getScopedSettings(this.getPreferredScopeUri());
     if (scopedSettings.executablePath.length > 0) {
@@ -256,7 +250,6 @@ export class ExtensionController implements vscode.Disposable, ExtensionApi {
   private async installManagedExecutable(): Promise<
     | {
         executablePath: string;
-        kind: "installed" | "noop";
         metadata: {
           assetName: string;
           releaseTag: string;
@@ -271,20 +264,6 @@ export class ExtensionController implements vscode.Disposable, ExtensionApi {
         await fetchPinnedDfixxerRelease(this.testHooks.fetchImpl ?? fetch),
         runtimePlatform,
       );
-      const currentMetadata = await readManagedInstallMetadata(managedLayout.metadataPath);
-
-      if (
-        currentMetadata &&
-        currentMetadata.releaseTag === asset.releaseTag &&
-        existsSync(managedLayout.executablePath)
-      ) {
-        this.logger.info(`Managed dfixxer ${currentMetadata.releaseTag} is already current.`);
-        return {
-          executablePath: managedLayout.executablePath,
-          kind: "noop",
-          metadata: currentMetadata,
-        };
-      }
 
       const installResult = await downloadAndInstallManagedExecutable({
         asset,
@@ -296,7 +275,6 @@ export class ExtensionController implements vscode.Disposable, ExtensionApi {
 
       return {
         executablePath: installResult.executablePath,
-        kind: "installed",
         metadata: installResult.metadata,
       };
     } catch (error: unknown) {
