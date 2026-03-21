@@ -315,6 +315,8 @@ export class ExtensionController implements vscode.Disposable, ExtensionApi {
       await this.delay(50);
     }
 
+    const baselineVersion = document.version;
+
     const workspaceFolderPath = getWorkspaceFolderPath(document.uri);
     const settings = getDocumentSettings(document);
     const configPath = resolveConfigurationPath(document, settings);
@@ -354,8 +356,7 @@ export class ExtensionController implements vscode.Disposable, ExtensionApi {
       this.logger.warn(`stderr: ${processResult.stderr}`);
     }
 
-    await vscode.commands.executeCommand("workbench.action.files.revert");
-    this.logger.info(`Reloaded ${document.uri.fsPath} after a successful dfixxer update.`);
+    await this.reloadFormattedDocumentIfSafe(document.uri, baselineVersion);
   }
 
   private async handleDidSaveTextDocument(document: vscode.TextDocument): Promise<void> {
@@ -474,6 +475,51 @@ export class ExtensionController implements vscode.Disposable, ExtensionApi {
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.logger.warn(`Could not show ${document.uri.fsPath} for reload after formatting: ${errorMessage}`);
       return undefined;
+    }
+  }
+
+  private async reloadFormattedDocumentIfSafe(documentUri: vscode.Uri, baselineVersion: number): Promise<void> {
+    const document = await vscode.workspace.openTextDocument(documentUri);
+    if (document.isDirty || document.version !== baselineVersion) {
+      this.logger.warn(
+        `Skipped reloading ${document.uri.fsPath} after formatting because the editor changed during the dfixxer run.`,
+      );
+      await this.showInformationMessage(
+        `dfixxer formatted ${path.basename(document.uri.fsPath)} on disk, but the file changed while formatting was running. Your newer edits were kept. Save or run Fix Current File again to apply formatting to the latest content.`,
+      );
+      return;
+    }
+
+    const previousActiveEditor = vscode.window.activeTextEditor;
+    const targetEditor = await this.ensureVisibleEditor(document);
+    if (!targetEditor) {
+      return;
+    }
+
+    try {
+      await vscode.window.showTextDocument(targetEditor.document, {
+        preview: false,
+        preserveFocus: false,
+        viewColumn: targetEditor.viewColumn,
+      });
+      await vscode.commands.executeCommand("workbench.action.files.revert");
+      this.logger.info(`Reloaded ${document.uri.fsPath} after a successful dfixxer update.`);
+    } finally {
+      if (
+        previousActiveEditor
+        && previousActiveEditor.document.uri.toString() !== document.uri.toString()
+      ) {
+        try {
+          await vscode.window.showTextDocument(previousActiveEditor.document, {
+            preview: false,
+            preserveFocus: false,
+            viewColumn: previousActiveEditor.viewColumn,
+          });
+        } catch (error: unknown) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          this.logger.warn(`Could not restore the previous active editor after reloading ${document.uri.fsPath}: ${errorMessage}`);
+        }
+      }
     }
   }
 

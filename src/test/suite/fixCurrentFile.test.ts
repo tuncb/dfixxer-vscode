@@ -35,6 +35,7 @@ async function waitForText(document: vscode.TextDocument, expectedText: string):
 suite("Fix Current File", () => {
   const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pascalFilePath = workspaceRoot ? path.join(workspaceRoot, "fix-current-file-test.pas") : "";
+  const alternatePascalFilePath = workspaceRoot ? path.join(workspaceRoot, "fix-current-file-alternate-test.pas") : "";
   const textFilePath = workspaceRoot ? path.join(workspaceRoot, "fix-current-file-test.txt") : "";
   const fakeExecutablePath = workspaceRoot ? path.join(workspaceRoot, "fake-dfixxer.exe") : "";
 
@@ -54,6 +55,7 @@ suite("Fix Current File", () => {
 
   teardown(async () => {
     await fs.rm(pascalFilePath, { force: true });
+    await fs.rm(alternatePascalFilePath, { force: true });
     await fs.rm(textFilePath, { force: true });
   });
 
@@ -133,5 +135,96 @@ suite("Fix Current File", () => {
     const logText = api.getLogLines().join("\n");
     assert.match(logText, /stdout: stdout output/u);
     assert.match(logText, /stderr: stderr output/u);
+  });
+
+  test("reloads the formatted file without reverting the active alternate editor", async () => {
+    const api = await getExtensionApi();
+    let releaseFormatter: (() => void) | undefined;
+
+    api.setTestHooks({
+      processRunner: async (_executablePath, args) => {
+        await new Promise<void>((resolve) => {
+          releaseFormatter = resolve;
+        });
+        await fs.writeFile(args[1] ?? "", "formatted text", "utf8");
+        return { exitCode: 0, stderr: "", stdout: "" };
+      },
+    });
+
+    await fs.writeFile(pascalFilePath, "original text", "utf8");
+    await fs.writeFile(alternatePascalFilePath, "alternate original", "utf8");
+
+    const formattedEditor = await openDocument(pascalFilePath);
+    const alternateEditor = await openDocument(alternatePascalFilePath);
+
+    const fixPromise = vscode.commands.executeCommand(commandIds.fixCurrentFile);
+    for (let attempt = 0; attempt < 20 && !releaseFormatter; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    assert.ok(releaseFormatter);
+
+    await alternateEditor.edit((editBuilder) => {
+      editBuilder.replace(
+        new vscode.Range(
+          alternateEditor.document.positionAt(0),
+          alternateEditor.document.positionAt(alternateEditor.document.getText().length),
+        ),
+        "alternate dirty",
+      );
+    });
+    assert.equal(vscode.window.activeTextEditor?.document.uri.fsPath, alternatePascalFilePath);
+
+    releaseFormatter();
+    await fixPromise;
+    await waitForText(formattedEditor.document, "formatted text");
+
+    assert.equal(formattedEditor.document.isDirty, false);
+    assert.equal(alternateEditor.document.getText(), "alternate dirty");
+    assert.equal(alternateEditor.document.isDirty, true);
+  });
+
+  test("keeps newer edits and notifies the user when the document changes during formatting", async () => {
+    const api = await getExtensionApi();
+    const infos: string[] = [];
+    let releaseFormatter: (() => void) | undefined;
+
+    api.setTestHooks({
+      processRunner: async (_executablePath, args) => {
+        await new Promise<void>((resolve) => {
+          releaseFormatter = resolve;
+        });
+        await fs.writeFile(args[1] ?? "", "formatted text", "utf8");
+        return { exitCode: 0, stderr: "", stdout: "" };
+      },
+      showInformationMessage: (message) => {
+        infos.push(message);
+        return Promise.resolve(undefined);
+      },
+    });
+
+    await fs.writeFile(pascalFilePath, "original text", "utf8");
+    const editor = await openDocument(pascalFilePath);
+
+    const fixPromise = vscode.commands.executeCommand(commandIds.fixCurrentFile);
+    for (let attempt = 0; attempt < 20 && !releaseFormatter; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    assert.ok(releaseFormatter);
+
+    await editor.edit((editBuilder) => {
+      editBuilder.replace(
+        new vscode.Range(editor.document.positionAt(0), editor.document.positionAt(editor.document.getText().length)),
+        "newer unsaved text",
+      );
+    });
+
+    releaseFormatter();
+    await fixPromise;
+
+    assert.equal(editor.document.getText(), "newer unsaved text");
+    assert.equal(editor.document.isDirty, true);
+    assert.deepEqual(infos, [
+      "dfixxer formatted fix-current-file-test.pas on disk, but the file changed while formatting was running. Your newer edits were kept. Save or run Fix Current File again to apply formatting to the latest content.",
+    ]);
   });
 });
