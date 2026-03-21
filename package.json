@@ -22,7 +22,7 @@
     "formatter",
     "dfixxer"
   ],
-  "main": "./out/extension.js",
+  "main": "./dist/extension.js",
   "activationEvents": [
     "onLanguage:pascal",
     "onLanguage:objectpascal",
@@ -97,11 +97,12 @@
   },
   "scripts": {
     "compile": "tsc -p ./",
-    "vscode:prepublish": "npm run compile",
+    "bundle": "node ./esbuild.mjs",
+    "vscode:prepublish": "npm run bundle",
     "watch": "tsc -w -p ./",
     "lint": "eslint \"src/**/*.ts\"",
     "test:unit": "mocha --config .mocharc.unit.json",
-    "test:extension": "node ./out/test/runTest.js",
+    "test:extension": "npm run bundle && node ./out/test/runTest.js",
     "test": "npm run compile && npm run lint && npm run test:unit && npm run test:extension",
     "package": "vsce package"
   },
@@ -113,6 +114,7 @@
     "@types/yazl": "^3.3.0",
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^3.2.2",
+    "esbuild": "^0.25.1",
     "eslint": "^9.21.0",
     "glob": "^11.0.1",
     "mocha": "^11.1.0",

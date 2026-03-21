@@ -1,9 +1,15 @@
+.gitignore
 .vscode/**
 .vscode-test/**
+dist/*.vsix
+dist/**/*.map
 src/**
+out/**
+node_modules/**
 out/test/**
 tsconfig.json
 eslint.config.mjs
+esbuild.mjs
 implement.md
 plans.md
 documentation.md
