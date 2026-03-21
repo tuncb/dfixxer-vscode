@@ -16,6 +16,15 @@ async function openDocument(filePath: string): Promise<vscode.TextEditor> {
   return vscode.window.showTextDocument(document);
 }
 
+async function openDocumentBeside(filePath: string): Promise<vscode.TextEditor> {
+  const document = await vscode.workspace.openTextDocument(filePath);
+  return vscode.window.showTextDocument(document, {
+    preview: false,
+    preserveFocus: false,
+    viewColumn: vscode.ViewColumn.Beside,
+  });
+}
+
 async function updateSetting<T>(key: string, value: T): Promise<void> {
   await vscode.workspace.getConfiguration(extensionName).update(key, value, vscode.ConfigurationTarget.Workspace);
 }
@@ -155,7 +164,12 @@ suite("Fix Current File", () => {
     await fs.writeFile(alternatePascalFilePath, "alternate original", "utf8");
 
     const formattedEditor = await openDocument(pascalFilePath);
-    const alternateEditor = await openDocument(alternatePascalFilePath);
+    const alternateEditor = await openDocumentBeside(alternatePascalFilePath);
+    await vscode.window.showTextDocument(formattedEditor.document, {
+      preview: false,
+      preserveFocus: false,
+      viewColumn: formattedEditor.viewColumn,
+    });
 
     const fixPromise = vscode.commands.executeCommand(commandIds.fixCurrentFile);
     for (let attempt = 0; attempt < 20 && !releaseFormatter; attempt += 1) {
@@ -163,6 +177,11 @@ suite("Fix Current File", () => {
     }
     assert.ok(releaseFormatter);
 
+    await vscode.window.showTextDocument(alternateEditor.document, {
+      preview: false,
+      preserveFocus: false,
+      viewColumn: alternateEditor.viewColumn,
+    });
     await alternateEditor.edit((editBuilder) => {
       editBuilder.replace(
         new vscode.Range(

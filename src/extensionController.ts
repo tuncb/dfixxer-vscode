@@ -502,7 +502,7 @@ export class ExtensionController implements vscode.Disposable, ExtensionApi {
         preserveFocus: false,
         viewColumn: targetEditor.viewColumn,
       });
-      await vscode.commands.executeCommand("workbench.action.files.revert");
+      await vscode.commands.executeCommand("workbench.action.files.revert", documentUri);
       this.logger.info(`Reloaded ${document.uri.fsPath} after a successful dfixxer update.`);
     } finally {
       if (
