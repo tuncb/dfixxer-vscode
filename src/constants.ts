@@ -1,6 +1,6 @@
 export const extensionName = "dfixxer";
 export const configurationSection = extensionName;
-export const managedDfixxerReleaseTag = "v0.13.0";
+export const managedDfixxerReleaseTag = "v0.14.0";
 
 export const commandIds = {
   createConfig: "dfixxer.createConfig",

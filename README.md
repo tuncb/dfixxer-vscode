@@ -12,7 +12,7 @@
 
 ## First Run
 
-If `dfixxer.executablePath` is empty and no managed binary is installed yet, the extension prompts to install the pinned `dfixxer` release `v0.13.0` the first time you run:
+If `dfixxer.executablePath` is empty and no managed binary is installed yet, the extension prompts to install the pinned `dfixxer` release `v0.14.0` the first time you run:
 
 - `dfixxer: Fix Current File`
 - `dfixxer: Create Configuration File`
@@ -44,7 +44,7 @@ If your platform is unsupported, point `dfixxer.executablePath` at a compatible 
 
 ### `dfixxer: Update dfixxer`
 
-- Downloads the pinned `v0.13.0` release to a temporary location, validates it, and only then replaces the managed executable
+- Downloads the pinned `v0.14.0` release to a temporary location, validates it, and only then replaces the managed executable
 - Leaves the existing managed install untouched when the download, extraction, validation, or replacement step fails
 - Still updates the managed copy when `dfixxer.executablePath` is set, but warns that the override remains authoritative
 
