@@ -2,7 +2,7 @@
   "name": "dfixxer-vscode",
   "displayName": "dfixxer",
   "description": "VS Code integration for the dfixxer Pascal formatter.",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "publisher": "tuncb",
   "license": "MIT",
   "repository": {

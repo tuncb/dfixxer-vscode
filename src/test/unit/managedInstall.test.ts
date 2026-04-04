@@ -2,6 +2,7 @@ import * as assert from "node:assert/strict";
 import { promises as fs } from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { managedDfixxerReleaseTag } from "../../constants";
 import { createLogger, OutputChannelLike } from "../../logger";
 import {
   downloadAndInstallManagedExecutable,
@@ -110,7 +111,7 @@ describe("installManagedExecutableFromArchive", () => {
 
   it("preserves a previous managed install when validation fails", async () => {
     const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "dfixxer-install-rollback-"));
-    const archivePath = path.join(tempRoot, "dfixxer-windows-x86_64-v0.12.0.zip");
+    const archivePath = path.join(tempRoot, `dfixxer-windows-x86_64-${managedDfixxerReleaseTag}.zip`);
     const logger = createLogger(new MemoryChannel(), () => new Date("2026-03-16T12:00:00.000Z"));
     const managed = getManagedExecutableLayout(path.join(tempRoot, "storage"), {
       platform: "win32",
@@ -136,8 +137,8 @@ describe("installManagedExecutableFromArchive", () => {
             archiveType: "zip",
             assetName: path.basename(archivePath),
             downloadUrl: "https://example.invalid/windows.zip",
-            releaseName: "Release v0.12.0",
-            releaseTag: "v0.12.0",
+            releaseName: `Release ${managedDfixxerReleaseTag}`,
+            releaseTag: managedDfixxerReleaseTag,
             size: 10,
           },
           logger,
